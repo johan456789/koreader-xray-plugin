@@ -240,7 +240,7 @@ end
 function AIHelper:loadLanguage()
     local DataStorage = require("datastorage")
     local f = io.open(DataStorage:getSettingsDir() .. "/xray/language.txt", "r")
-    self.current_language = f and f:read("*a"):match("^%s*(.-)%s*$") or "tr"
+    self.current_language = f and f:read("*a"):match("^%s*(.-)%s*$") or "en"
     if f then f:close() end
     self:loadPrompts()
 end
@@ -249,7 +249,7 @@ end
 function AIHelper:loadPrompts()
     local success, prompts = pcall(require, "prompts/" .. self.current_language)
     if not success then 
-        success, prompts = pcall(require, "prompts/tr") 
+        success, prompts = pcall(require, "prompts/en") 
     end
     self.prompts = prompts or {}
 end
@@ -286,12 +286,11 @@ function AIHelper:callGemini(prompt, config)
     local model = config.model or "gemini-2.5-flash"
     local url = "https://generativelanguage.googleapis.com/v1beta/models/" .. model .. ":generateContent?key=" .. config.api_key
     
-    -- GÜVENLİK FİLTRELERİNİ KAPAT (Dostoyevski vb. için şart)
     local safety_settings = {
-        { category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_NONE" },
-        { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "BLOCK_NONE" },
-        { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "BLOCK_NONE" },
-        { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_NONE" }
+        { category = "HARM_CATEGORY_HARASSMENT", threshold = "OFF" },
+        { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "OFF" },
+        { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "OFF" },
+        { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "OFF" }
     }
 
     local request_body = json.encode({

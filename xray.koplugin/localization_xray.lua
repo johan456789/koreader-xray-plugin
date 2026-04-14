@@ -4,7 +4,7 @@ local logger = require("logger")
 local lfs = require("libs/libkoreader-lfs")
 
 local Localization = {
-    current_language = "tr",
+    current_language = "en",
     translations = {},
     available_languages = {},
 }
@@ -138,11 +138,11 @@ function Localization:loadTranslations()
     else
         logger.warn("Localization: Failed to load .po file")
         
-        -- Fallback to Turkish
-        if self.current_language ~= "tr" then
-            logger.info("Localization: Falling back to Turkish")
-            self.current_language = "tr"
-            po_file = plugin_dir .. "/languages/tr.po"
+        -- Fallback to English
+        if self.current_language ~= "en" then
+            logger.info("Localization: Falling back to English")
+            self.current_language = "en"
+            po_file = plugin_dir .. "/languages/en.po"
             translations = self:parsePO(po_file)
             if translations then
                 self.translations = translations
@@ -216,11 +216,11 @@ function Localization:loadLanguage()
             logger.info("Localization: Loaded language from file:", lang)
         else
             logger.warn("Localization: Language not found:", lang)
-            self.current_language = "tr"
+            self.current_language = "en"
         end
     else
-        self.current_language = "tr"
-        logger.info("Localization: No saved language, using default: tr")
+        self.current_language = "en"
+        logger.info("Localization: No saved language, using default: en")
     end
 end
 

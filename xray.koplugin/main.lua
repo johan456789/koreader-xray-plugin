@@ -464,7 +464,7 @@ function XRayPlugin:showLanguageSelection()
     local ButtonDialog = require("ui/widget/buttondialog")
     local InfoMessage = require("ui/widget/infomessage")
     
-    local current_lang = "tr" -- Varsayılan
+    local current_lang = "en" -- Default
     if self.loc then
         current_lang = self.loc:getLanguage()
     end
