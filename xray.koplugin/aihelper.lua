@@ -20,7 +20,7 @@ AIHelper.providers = {
         enabled = true,
         api_key = nil,
         endpoint = "https://api.openai.com/v1/chat/completions",
-        model = "gpt-4o-mini", -- Varsayılan model (uygun maliyet/performans)
+        model = "gpt-4o-mini", -- Default model (cost/performance)
     }
 }
 
@@ -104,10 +104,17 @@ end
 -- Load configuration
 function AIHelper:loadConfig()
     local success, config = pcall(require, "config")
+    self.config_keys = { gemini = nil, chatgpt = nil }
     if success and config then
-        if config.gemini_api_key then self.providers.gemini.api_key = config.gemini_api_key end
+        if config.gemini_api_key then 
+            self.providers.gemini.api_key = config.gemini_api_key 
+            self.config_keys.gemini = config.gemini_api_key
+        end
         if config.gemini_model then self.providers.gemini.model = config.gemini_model end
-        if config.chatgpt_api_key then self.providers.chatgpt.api_key = config.chatgpt_api_key end
+        if config.chatgpt_api_key then 
+            self.providers.chatgpt.api_key = config.chatgpt_api_key 
+            self.config_keys.chatgpt = config.chatgpt_api_key
+        end
         if config.chatgpt_model then self.providers.chatgpt.model = config.chatgpt_model end
         if config.default_provider then self.default_provider = config.default_provider end
         if config.settings then self.settings = config.settings end
@@ -140,7 +147,7 @@ function AIHelper:loadModelFromFile()
         end
     end
     
-    -- Default provider (YENI)
+    -- Default provider
     local provider_file = DataStorage:getSettingsDir() .. "/xray/default_provider.txt"
     file = io.open(provider_file, "r")
     if file then
@@ -151,15 +158,25 @@ function AIHelper:loadModelFromFile()
             logger.info("AIHelper: Loaded default provider from file:", provider)
         end
     end
-        -- Gemini API Key
+    
+    -- Gemini API Key
     local gemini_key_file = DataStorage:getSettingsDir() .. "/xray/gemini_api_key.txt"
     file = io.open(gemini_key_file, "r")
     if file then
-        local key = file:read("*a"):match("^%s*(.-)%s*$")
+        local raw_key = file:read("*a")
         file:close()
-        if key and #key > 0 then
-            self.providers.gemini.api_key = key
-            logger.info("AIHelper: Loaded Gemini API key from file")
+        if raw_key then
+            local clean_key = raw_key:gsub("%s+", "")
+            if #clean_key > 0 then
+                self.providers.gemini.api_key = clean_key
+                self.providers.gemini.ui_key_active = true
+                logger.info("AIHelper: Loaded Gemini API key from file")
+            end
+        end
+    else
+        self.providers.gemini.ui_key_active = false
+        if self.config_keys and self.config_keys.gemini then
+            self.providers.gemini.api_key = self.config_keys.gemini
         end
     end
     
@@ -167,13 +184,36 @@ function AIHelper:loadModelFromFile()
     local chatgpt_key_file = DataStorage:getSettingsDir() .. "/xray/chatgpt_api_key.txt"
     file = io.open(chatgpt_key_file, "r")
     if file then
-        local key = file:read("*a"):match("^%s*(.-)%s*$")
+        local raw_key = file:read("*a")
         file:close()
-        if key and #key > 0 then
-            self.providers.chatgpt.api_key = key
-            logger.info("AIHelper: Loaded ChatGPT API key from file")
+        if raw_key then
+            local clean_key = raw_key:gsub("%s+", "")
+            if #clean_key > 0 then
+                self.providers.chatgpt.api_key = clean_key
+                self.providers.chatgpt.ui_key_active = true
+                logger.info("AIHelper: Loaded ChatGPT API key from file")
+            end
+        end
+    else
+        self.providers.chatgpt.ui_key_active = false
+        if self.config_keys and self.config_keys.chatgpt then
+            self.providers.chatgpt.api_key = self.config_keys.chatgpt
         end
     end
+end
+
+-- Function to clear the UI override key and revert to config
+function AIHelper:clearAPIKeyFile(provider)
+    local DataStorage = require("datastorage")
+    local key_file = DataStorage:getSettingsDir() .. "/xray/" .. provider .. "_api_key.txt"
+    os.remove(key_file)
+    if self.config_keys and self.config_keys[provider] then
+        self.providers[provider].api_key = self.config_keys[provider]
+    else
+        self.providers[provider].api_key = nil
+    end
+    self.providers[provider].ui_key_active = false
+    logger.info("AIHelper: Cleared UI key for " .. provider .. ", reverted to config.")
 end
 
 
@@ -207,7 +247,7 @@ function AIHelper:getBookData(title, author, provider_name, context)
         return nil, "error_no_api_key"
     end
     
-    -- Context ile prompt oluştur
+    -- Create prompts with context.
     local prompt = self:createPrompt(title, author, context)
     
     logger.info("AIHelper: Using provider:", provider, "Model:", provider_config.model)
@@ -258,15 +298,31 @@ end
 function AIHelper:createPrompt(title, author, context)
     if not self.prompts then self:loadLanguage() end
     
-    -- Context varsa ve spoiler_free modundaysa özel prompt kullan
+    local enhanced_title = title
+    local enhanced_author = author or "Unknown"
+    
+    if context then
+        if context.filename or context.pub_year then
+            enhanced_title = string.format("%s (File: %s, Year: %s)", 
+                title, 
+                context.filename or "N/A", 
+                context.pub_year or "N/A")
+        end
+        
+        if context.chapter_title then
+            enhanced_author = enhanced_author .. " | Current Chapter: " .. context.chapter_title
+        end
+    end
+    
+    -- Use a custom prompt if context exists and you're in spoiler_free mode.
     if context and context.spoiler_free then
         local template = self.prompts.spoiler_free or self.prompts.main
-        -- Artık sadece 3 parametre: title, author, percent
-        return string.format(template, title, author or "Bilinmiyor", context.reading_percent)
+        -- Feeds Enhanced Title, Enhanced Author, Percent
+        return string.format(template, enhanced_title, enhanced_author, context.reading_percent)
     else
-        -- Tam kitap için normal prompt
+        -- Normal prompt for the full book
         local template = self.prompts.main
-        return string.format(template, title, author or "Bilinmiyor")
+        return string.format(template, enhanced_title, enhanced_author)
     end
 end
 
@@ -275,33 +331,30 @@ function AIHelper:getFallbackStrings()
     return self.prompts.fallback or {}
 end
 
--- Call Google Gemini API (FIXED VERSION)
+--- Call Google Gemini API (FIXED VERSION)
 function AIHelper:callGemini(prompt, config)
     logger.info("AIHelper: Calling Google Gemini API")
     
     if not self:checkNetworkConnectivity() then
-        return nil, "error_no_network", "İnternet bağlantısı yok"
+        return nil, "error_no_network", "No internet connection."
     end
     
-    local model = config.model or "gemini-2.5-flash"
+    local model = config.model or "gemini-1.5-flash"
     local url = "https://generativelanguage.googleapis.com/v1beta/models/" .. model .. ":generateContent?key=" .. config.api_key
     
-    local safety_settings = {
-        { category = "HARM_CATEGORY_HARASSMENT", threshold = "OFF" },
-        { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "OFF" },
-        { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "OFF" },
-        { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "OFF" }
-    }
+    -- Load the system instruction
+    local system_instruction = self.prompts and self.prompts.system_instruction or "You are an expert literary critic. Respond ONLY with valid JSON format."
 
+    -- Bulletproof prompt format: prepend system instruction to bypass finicky schema requirements
+    local combined_prompt = system_instruction .. "\n\n" .. prompt
+
+    -- Stripped down to the bare minimum required fields to prevent 400 schema validation errors
     local request_body = json.encode({
-        contents = {{ parts = {{ text = prompt }} }},
-        safetySettings = safety_settings,
+        contents = {{ parts = {{ text = combined_prompt }} }},
         generationConfig = {
             temperature = 0.4,
-            topK = 40,
-            topP = 0.95,
             maxOutputTokens = 8192,
-            responseMimeType = "application/json" -- JSON Modu
+            responseMimeType = "application/json"
         }
     })
     
@@ -333,35 +386,38 @@ function AIHelper:callGemini(prompt, config)
 
         if code_num == 200 then
             local success, data = pcall(json.decode, response_text)
-            if not success then return nil, "error_json_parse" end
+            if not success then return nil, "error_json_parse", "Failed to parse JSON" end
             
-            -- CRASH PROTECTION: Null check yapısı
             if data and data.candidates and data.candidates[1] then
                 local candidate = data.candidates[1]
                 
-                -- Güvenlik sebebiyle engellendi mi?
                 if candidate.finishReason == "SAFETY" then
-                     logger.warn("AIHelper: BLOCKED BY SAFETY FILTER")
-                     return nil, "error_safety", "Google Güvenlik Filtresi engelledi."
+                     return nil, "error_safety", "Blocked by Google Safety Filter."
                 end
 
                 if candidate.content and candidate.content.parts and candidate.content.parts[1] then
                     return self:parseAIResponse(candidate.content.parts[1].text)
                 else
-                    logger.warn("AIHelper: No text in response")
-                    return nil, "error_api", "API boş yanıt döndürdü."
+                    return nil, "error_api", "API returned an empty response."
                 end
             else
-                return nil, "error_api", "Geçersiz yanıt formatı"
+                return nil, "error_api", "Invalid response format from Google."
             end
         elseif code_num == 503 then
-             logger.warn("AIHelper: 503 Service Unavailable (Retrying...)")
+             logger.warn("AIHelper: 503 Service Unavailable")
         else
-             return nil, "error_" .. tostring(code_num), "Hata Kodu: " .. tostring(code_num)
+             -- EXTRACT THE EXACT ERROR MESSAGE FROM GOOGLE SO YOU CAN SEE IT!
+             local error_detail = "HTTP " .. tostring(code_num)
+             local success, err_data = pcall(json.decode, response_text)
+             if success and err_data and err_data.error then
+                 error_detail = err_data.error.message or error_detail
+             end
+             logger.warn("AIHelper: API Error Details: " .. response_text)
+             return nil, "error_" .. tostring(code_num), "API Error: " .. error_detail
         end
     end
     
-    return nil, "error_timeout", "Zaman aşımı"
+    return nil, "error_timeout", "Connection timed out"
 end
 
 -- Call ChatGPT API (COMPLETE IMPLEMENTATION)
@@ -369,7 +425,7 @@ function AIHelper:callChatGPT(prompt, config)
     logger.info("AIHelper: Calling ChatGPT API")
     
     if not self:checkNetworkConnectivity() then
-        return nil, "error_no_network", "İnternet bağlantısı yok"
+        return nil, "error_no_network", "No internet."
     end
     
     local model = config.model or "gpt-4o-mini"

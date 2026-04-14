@@ -485,28 +485,24 @@ function XRayPlugin:showLanguageSelection()
     local buttons = {
         {
             {
-                -- Eğer mevcut dil 'tr' ise yanına tik koy
-                text = "Türkçe" .. (current_lang == "tr" and " ✓" or ""), 
-                callback = function() changeLang("tr", "Türkçe") end
-            }
-        },
-        {
-            {
-                -- Eğer mevcut dil 'en' ise yanına tik koy
                 text = "English" .. (current_lang == "en" and " ✓" or ""), 
                 callback = function() changeLang("en", "English") end
             }
         },
         {
             {
-                -- Eğer mevcut dil 'por' ise yanına tik koy
+                text = "Türkçe" .. (current_lang == "tr" and " ✓" or ""), 
+                callback = function() changeLang("tr", "Türkçe") end
+            }
+        },
+        {
+            {
                 text = "Português" .. (current_lang == "pt_br" and " ✓" or ""), 
                 callback = function() changeLang("pt_br", "Português") end
             }
         },
         {
             {
-                -- Eğer mevcut dil 'por' ise yanına tik koy
                 text = "Español" .. (current_lang == "es" and " ✓" or ""), 
                 callback = function() changeLang("es", "Español") end
             }
@@ -809,18 +805,16 @@ end
 function XRayPlugin:continueWithFetch(reading_percent)
     logger.info("XRayPlugin: Continuing with fetch process (reading_percent:", reading_percent, ")")
     
-    -- 1. Cache Manager Başlat (Kontrol için gerekli)
+    -- 1. Cache Manager
     if not self.cache_manager then
         local CacheManager = require("cachemanager")
         self.cache_manager = CacheManager:new()
     end
     
-    -- 2. CACHE KONTROLÜ
     local book_path = self.ui.document.file
     local cache_path = self.cache_manager:getCachePath(book_path)
     local lfs = require("libs/libkoreader-lfs")
     
-    -- Eğer cache dosyası varsa, işlemi durdur ve uyarı ver
     if cache_path and lfs.attributes(cache_path) then
         local InfoMessage = require("ui/widget/infomessage")
         UIManager:show(InfoMessage:new{
@@ -830,35 +824,42 @@ function XRayPlugin:continueWithFetch(reading_percent)
         return 
     end
 
-    -- 3. AI Helper Başlat (Eğer cache yoksa devam et)
+    -- 3. AI Helper 
     if not self.ai_helper then
         local AIHelper = require("aihelper")
         self.ai_helper = AIHelper
         self.ai_helper:init()
     end
     
-    -- Seçili provider'ı al (varsayılan: gemini)
     local selected_provider = self.ai_provider or self.ai_helper.default_provider or "gemini"
     local provider_config = self.ai_helper.providers[selected_provider]
     
-    local title = self.ui.document:getProps().title or "Unknown"
-    local author = self.ui.document:getProps().authors or ""
+    -- Gather rich metadata
+    local props = self.ui.document:getProps() or {}
+    local title = props.title or "Unknown"
+    local author = props.authors or "Unknown"
+    local pub_year = props.date or props.pubdate or props.year or "Unknown"
     
-    -- Model adını seçili provider'a göre al
+    local file_path = self.ui.document.file or ""
+    local filename = file_path:match("^.+/(.+)$") or file_path
+
+    if not self.chapter_analyzer then
+        local ChapterAnalyzer = require("chapteranalyzer")
+        self.chapter_analyzer = ChapterAnalyzer:new()
+    end
+    local _, chapter_title = self.chapter_analyzer:getCurrentChapterText(self.ui)
+    
     local current_model = self.loc:t("unknown_model")
     if provider_config and provider_config.model then
         current_model = provider_config.model
     end
     
-    -- Provider adını al
     local provider_name = provider_config and provider_config.name or "AI"
     
-    -- Spoiler durumunu hazırla
     local spoiler_status = reading_percent < 100 and 
         string.format(self.loc:t("spoiler_free_mode"), reading_percent) or 
         self.loc:t("full_book_mode_active")
     
-    -- 4. Bekleme Mesajı Göster
     local InfoMessage = require("ui/widget/infomessage")
     local wait_msg = InfoMessage:new{
         text = string.format(
@@ -876,12 +877,14 @@ function XRayPlugin:continueWithFetch(reading_percent)
     }
     UIManager:show(wait_msg)
     
-    -- 5. İşlemi Başlat
     UIManager:scheduleIn(1.0, function()
-        -- Seçili provider'ı kullan (reading_percent context olarak gönderiliyor)
+        -- Pass all the metadata in context
         local context = {
             reading_percent = reading_percent,
-            spoiler_free = reading_percent < 100
+            spoiler_free = reading_percent < 100,
+            filename = filename,
+            pub_year = pub_year,
+            chapter_title = chapter_title
         }
         
         local book_data, error_code, error_msg = self.ai_helper:getBookData(title, author, selected_provider, context)
@@ -1174,13 +1177,21 @@ function XRayPlugin:setGeminiAPIKey()
     end
     
     local current_key = self.ai_helper.providers.gemini.api_key or ""
+    local is_ui_key = self.ai_helper.providers.gemini.ui_key_active
+    
+    local desc = self.loc:t("gemini_key_desc")
+    if is_ui_key then
+        desc = desc .. "\n\n[Currently using UI entered key]"
+    else
+        desc = desc .. "\n\n[Currently using config.lua key]"
+    end
     
     local input_dialog
     input_dialog = InputDialog:new{
         title = self.loc:t("gemini_key_title"), 
         input = current_key,
         input_hint = self.loc:t("gemini_key_hint"), 
-        description = self.loc:t("gemini_key_desc"), 
+        description = desc, 
         buttons = {
             {
                 {
@@ -1190,16 +1201,23 @@ function XRayPlugin:setGeminiAPIKey()
                     end,
                 },
                 {
+                    text = "Use Config Key",
+                    callback = function()
+                        self.ai_helper:clearAPIKeyFile("gemini")
+                        self.ai_provider = "gemini"
+                        UIManager:close(input_dialog)
+                        UIManager:show(InfoMessage:new{
+                            text = "Reverted to config.lua key", 
+                            timeout = 3,
+                        })
+                    end,
+                },
+                {
                     text = self.loc:t("save"),
                     is_enter_default = true,
                     callback = function()
                         local api_key = input_dialog:getInputText()
                         if api_key and #api_key > 0 then
-                            if not self.ai_helper then
-                                local AIHelper = require("aihelper")
-                                self.ai_helper = AIHelper
-                            end
-                            
                             self.ai_helper:setAPIKey("gemini", api_key)
                             self.ai_provider = "gemini"
                             
@@ -1228,13 +1246,21 @@ function XRayPlugin:setChatGPTAPIKey()
     end
     
     local current_key = self.ai_helper.providers.chatgpt.api_key or ""
+    local is_ui_key = self.ai_helper.providers.chatgpt.ui_key_active
+    
+    local desc = self.loc:t("chatgpt_key_desc")
+    if is_ui_key then
+        desc = desc .. "\n\n[Currently using UI entered key]"
+    else
+        desc = desc .. "\n\n[Currently using config.lua key]"
+    end
     
     local input_dialog
     input_dialog = InputDialog:new{
         title = self.loc:t("chatgpt_key_title"), 
         input = current_key,
         input_hint = self.loc:t("chatgpt_key_hint"), 
-        description = self.loc:t("chatgpt_key_desc"), 
+        description = desc, 
         buttons = {
             {
                 {
@@ -1244,15 +1270,23 @@ function XRayPlugin:setChatGPTAPIKey()
                     end,
                 },
                 {
+                    text = "Use Config Key",
+                    callback = function()
+                        self.ai_helper:clearAPIKeyFile("chatgpt")
+                        self.ai_provider = "chatgpt"
+                        UIManager:close(input_dialog)
+                        UIManager:show(InfoMessage:new{
+                            text = "Reverted to config.lua key", 
+                            timeout = 3,
+                        })
+                    end,
+                },
+                {
                     text = self.loc:t("save"),
                     is_enter_default = true,
                     callback = function()
                         local api_key = input_dialog:getInputText()
                         if api_key and #api_key > 0 then
-                            if not self.ai_helper then
-                                local AIHelper = require("aihelper")
-                                self.ai_helper = AIHelper
-                            end
                             self.ai_helper:setAPIKey("chatgpt", api_key)
                             self.ai_provider = "chatgpt"
                             
