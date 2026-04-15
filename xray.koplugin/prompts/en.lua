@@ -1,97 +1,102 @@
 return {
     -- System instruction
-    system_instruction = "You are an expert literary critic. Your response must be ONLY in valid JSON format. Do not use Markdown, introductory sentences, or extra explanations.",
+    system_instruction = "You are an expert literary researcher. Your response must be ONLY in valid JSON format. Ensure data is highly accurate and pertains strictly to the provided context.",
     
     -- Main prompt (Full book analysis)
     main = [[Book: "%s" - Author: %s
-Create detailed X-Ray data for this book. Fill in the JSON format below COMPLETELY.
-RULES:
-1. Do not deviate from the JSON format.
-2. The "author_bio" field is MANDATORY; write 2-3 sentences about the author.
-3. CHARACTERS: List at least 15-20 characters (Protagonists and supporting characters).
-4. HISTORICAL FIGURES: Find REAL historical figures mentioned in the book or influencing the era. If none, do not leave empty; add the king/leader of the era as a "Period Figure".
-5. DETAILS: Never leave "importance_in_book" and "context_in_book" fields empty. Analyze the context within the book.
+Create exhaustive X-Ray data for this book. Fill the JSON format COMPLETELY.
+
+CORE RULES:
+1. TARGET BOOK: Only include data from THIS book. Use title, author, and context to avoid series-wide spoilers if possible.
+2. CHARACTERS: List at least 20-30 characters. Include protagonists, every named supporting character, and notable minor figures.
+3. LOCATIONS: List at least 15-20 significant locations.
+4. HISTORICAL FIGURES: Identify 5-10 real-world or legendary/in-world historical figures mentioned.
+5. DETAILS: Provide rich, factual descriptions (3-4 sentences each).
+
 REQUIRED JSON FORMAT:
 {
-  "book_title": "Book Title",
+  "book_title": "Full Book Title",
   "author": "Author Name",
-  "author_bio": "Detailed info about the author's life and literary personality (Mandatory)",
-  "summary": "Comprehensive summary of the book (Spoiler-free overview)",
+  "author_bio": "Detailed biography.",
+  "summary": "Full book summary (overview).",
   "characters": [
     {
-      "name": "Character Name",
-      "role": "Protagonist / Supporting Character / Antagonist",
-      "gender": "Male / Female / Ambiguous",
-      "occupation": "Occupation or Status",
-      "description": "Detailed analysis and personality traits of the character"
+      "name": "Full Name",
+      "role": "Protagonist / Supporting / Antagonist",
+      "gender": "Gender",
+      "occupation": "Job/Status",
+      "description": "Comprehensive 3-4 sentence analysis including personality, major arcs, and significance."
     }
   ],
   "historical_figures": [
     {
-      "name": "Historical Figure Name",
-      "role": "Role in Real History (e.g., Emperor, Philosopher)",
-      "biography": "Short biography",
-      "importance_in_book": "What is this person's importance in the book? Why are they mentioned?",
-      "context_in_book": "How do characters mention this person? In what context do they appear?"
+      "name": "Name",
+      "role": "Role",
+      "biography": "Bio",
+      "importance_in_book": "Why they matter here",
+      "context_in_book": "Scene/context"
     }
   ],
   "locations": [
-    {"name": "Location Name", "description": "Description of the location", "importance": "Significance in the story"}
+    {"name": "Place", "description": "Atmospheric description", "importance": "Narrative significance"}
   ],
   "themes": ["Theme 1", "Theme 2", "Theme 3", "Theme 4", "Theme 5"],
   "timeline": [
-    {"event": "Event Title", "chapter": "Relevant Chapter/Section", "importance": "Significance of the event"}
+    {"event": "Key Plot Point", "chapter": "Chapter", "importance": "Significance"}
   ]
 }]],
 
     -- Spoiler-free prompt (Based on reading progress)
     spoiler_free = [[Book: "%s" - Author: %s
-CRITICAL: The reader has read %d%% of this book. Create X-Ray data ONLY for content up to this reading point.
+CRITICAL: The reader has only read %d%% of this book. 
 
-SPOILER PREVENTION RULES:
-1. DO NOT include any characters that appear AFTER this reading point
-2. DO NOT mention any plot events that occur AFTER this point
-3. DO NOT reveal any character developments that happen later in the book
-4. Timeline events must ONLY cover what the reader has already read
-5. Character descriptions should reflect their current state, not later developments
-6. Summary must ONLY cover events the reader has already experienced
+DATA SOURCES (USE THESE ONLY):
+I have provided 'BOOK TEXT CONTEXT' (up to 100,000 characters) and 'USER HIGHLIGHTS & NOTES'. 
+You MUST prioritize this information above your general knowledge of the book.
 
-ADDITIONAL RULES:
-1. Author bio is mandatory (this never contains spoilers)
-2. Historical figures can be included if they're mentioned in the portion already read
-3. Locations should only be those visited/mentioned so far
-4. Themes should reflect what's apparent in the story up to this point
+STRICT SPOILER-FREE RULES (ZERO TOLERANCE):
+1. NO EXTERNAL KNOWLEDGE: If a character reveal or plot twist occurs at 50%% and the reader is at %d%%, you MUST NOT mention it, even if you know it from your training data.
+2. TEXT-DRIVEN: Use the provided text to describe characters and locations. If the text says a character is a "loyal knight", do not call them a "traitor" because you know how the book ends.
+3. ITEM LIMITS: Only include characters introduced BEFORE the %d%% mark (or present in the provided text).
+4. DESCRIPTIONS: Must reflect ONLY what is known at %d%%. Do NOT hint at future reveals or use phrases like "later he will..." or "destined to become...".
+5. LOCATIONS: Only include locations visited or mentioned in the provided text.
+6. PLOT/SUMMARY: The summary and timeline must stop EXACTLY at the %d%% mark.
+
+ITEM COUNT REQUIREMENTS:
+1. CHARACTERS: List 15-25 characters encountered in the provided text.
+2. LOCATIONS: List 10-15 locations visited/mentioned in the text.
+3. TIMELINE: List 10-15 major events that have already occurred in the provided text.
 
 REQUIRED JSON FORMAT:
 {
   "book_title": "Book Title",
   "author": "Author Name",
-  "author_bio": "Detailed info about the author's life and literary personality (Mandatory)",
-  "summary": "Summary covering ONLY what the reader has read so far",
+  "author_bio": "Biography",
+  "summary": "Summary of ONLY the portion read so far (%d%%). Use the provided context.",
   "characters": [
     {
-      "name": "Character Name (only if already introduced)",
-      "role": "Protagonist / Supporting Character / Antagonist",
-      "gender": "Male / Female / Ambiguous",
-      "occupation": "Occupation or Status",
-      "description": "Character state at current reading point - DO NOT reveal later developments"
+      "name": "Name",
+      "role": "Perceived role at %d%%",
+      "gender": "Gender",
+      "occupation": "Current occupation",
+      "description": "Character status EXACTLY at the %d%% mark based on provided text. ABSOLUTELY NO SPOILERS from later in the book."
     }
   ],
   "historical_figures": [
     {
-      "name": "Historical Figure Name",
-      "role": "Role in Real History",
-      "biography": "Short biography",
-      "importance_in_book": "Their relevance up to current reading point",
-      "context_in_book": "How they're mentioned in the portion already read"
+      "name": "Name",
+      "role": "Role",
+      "biography": "Bio",
+      "importance_in_book": "Significance up to %d%%",
+      "context_in_book": "Context of mention"
     }
   ],
   "locations": [
-    {"name": "Location Name (only if visited/mentioned so far)", "description": "Description", "importance": "Significance up to this point"}
+    {"name": "Name", "description": "Description based ONLY on text read so far (%d%%). No spoilers.", "importance": "Significance so far"}
   ],
-  "themes": ["Only themes evident in the story so far"],
+  "themes": ["Themes apparent up to %d%%"],
   "timeline": [
-    {"event": "Event Title (ONLY events that have occurred)", "chapter": "Relevant Chapter/Section", "importance": "Significance"}
+    {"event": "Event that ALREADY happened in the provided text", "chapter": "Chapter", "importance": "Significance"}
   ]
 }]],
 

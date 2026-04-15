@@ -355,6 +355,9 @@ msgstr "Could not retrieve chapter text"
 msgid "no_characters_in_chapter"
 msgstr "No characters found in this chapter.\n\nChapter: %s"
 
+msgid "mentions"
+msgstr "mentions"
+
 msgid "this_chapter"
 msgstr "This Chapter"
 

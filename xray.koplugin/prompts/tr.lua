@@ -1,99 +1,98 @@
 return {
     -- System instruction
-    system_instruction = "Sen uzman bir edebiyat eleştirmenisin. Cevabın YALNIZCA geçerli JSON formatında olmalı. Markdown, giriş cümleleri veya ek açıklamalar kullanma. Yanıtını Türkçe olarak hazırla.",
+    system_instruction = "Sen uzman bir edebiyat eleştirmeni ve araştırmacısısın. Yanıtın YALNIZCA geçerli JSON formatında olmalıdır. JSON yapısı dışında herhangi bir metin ekleme. Verilerin son derece doğru olduğundan ve kesinlikle belirtilen kitapla ilgili olduğundan emin ol.",
     
     -- Main prompt (Full book analysis)
     main = [[Kitap: "%s" - Yazar: %s
-Bu kitap için detaylı X-Ray verisi oluştur. Aşağıdaki JSON formatını EKSİKSİZ olarak doldur.
+Bu kitap için detaylı X-Ray verileri oluştur. Aşağıdaki JSON formatını TAMAMEN doldur.
 
-KURALLAR:
-1. JSON formatından asla sapma.
-2. "author_bio" alanı ZORUNLUDUR; yazar hakkında 2-3 cümle yaz.
-3. KARAKTERLER: En az 15-20 karakter listele (Baş kahramanlar ve yardımcı karakterler).
-4. TARİHİ ŞAHSİYETLER: Kitapta adı geçen veya o dönemi etkileyen GERÇEK tarihi kişileri bul. Hiçbiri yoksa boş bırakma; dönemin kralını/liderini "Dönem Figürü" olarak ekle.
-5. DETAYLAR: "importance_in_book" ve "context_in_book" alanlarını asla boş bırakma. Kitap içindeki bağlamı analiz et.
+TEMEL KURALLAR:
+1. YALNIZCA BU kitaptan veri dahil et. Doğru eseri analiz ettiğinden emin olmak için sağlanan başlığı, yazarı ve dosya adını kullan.
+2. KARAKTERLER: En az 15-20 karakter listele. Tüm ana karakterleri, önemli yardımcı karakterleri ve kayda değer yan figürleri dahil et.
+3. MEKANLAR: Kitapta açıklanan en az 10-15 önemli mekanı listele.
+4. TARİHİ KİŞİLER: Kitapta adı geçen veya kurguyla ilgili en az 5-10 gerçek dünya tarihi kişisini belirle. Eğer kurgusal bir dünyaysa, o dünyanın tarihindeki önemli efsanevi veya tarihi figürleri listele.
+5. DETAYLAR: Zengin ve gerçekçi açıklamalar sağla. Belirsiz genellemelerden kaçın.
+6. JSON: Çıktı tek bir geçerli JSON nesnesi OLMALIDIR.
 
 GEREKLİ JSON FORMATI:
 {
-  "book_title": "Kitap Başlığı",
+  "book_title": "Kitabın Tam Adı",
   "author": "Yazar Adı",
-  "author_bio": "Yazarın hayatı ve edebi kişiliği hakkında detaylı bilgi (Zorunlu)",
-  "summary": "Kitabın kapsamlı özeti (Spoiler içermeyen genel bakış)",
+  "author_bio": "Yazarın biyografisi, tarzına ve bu spesifik eserine odaklanarak.",
+  "summary": "Kitabın konusu ve olay örgüsünün kapsamlı özeti (Spoiler içermeyen).",
   "characters": [
     {
       "name": "Karakter Adı",
-      "role": "Baş Kahraman / Yardımcı Karakter / Antagonist",
-      "gender": "Erkek / Kadın / Belirsiz",
-      "occupation": "Meslek veya Statü",
-      "description": "Karakterin detaylı analizi ve kişilik özellikleri"
+      "role": "Ana Karakter / Yardımcı / Antagonist",
+      "gender": "Erkek / Kadın / Diğer",
+      "occupation": "Statü veya iş",
+      "description": "Kişilik ve önem dahil olmak üzere 3-4 cümlelik detaylı karakter analizi."
     }
   ],
   "historical_figures": [
     {
-      "name": "Tarihi Kişinin Adı",
-      "role": "Gerçek Tarihteki Rolü (örn. İmparator, Filozof)",
+      "name": "Kişi Adı",
+      "role": "Tarihi Rolü",
       "biography": "Kısa biyografi",
-      "importance_in_book": "Bu kişinin kitaptaki önemi nedir? Neden bahsediliyor?",
-      "context_in_book": "Karakterler bu kişiden nasıl bahsediyor? Hangi bağlamda geçiyor?"
+      "importance_in_book": "Bu spesifik kitapta neden adı geçiyor?",
+      "context_in_book": "Göründüğü spesifik sahne veya tartışma"
     }
   ],
   "locations": [
-    {"name": "Konum Adı", "description": "Konumun açıklaması", "importance": "Hikayedeki önemi"}
+    {"name": "Mekan Adı", "description": "Görsel ve atmosferik açıklama", "importance": "Anlatıdaki önemi"}
   ],
-  "themes": ["Tema 1", "Tema 2", "Tema 3", "Tema 4", "Tema 5"],
+  "themes": ["Detaylı Tema 1", "Detaylı Tema 2", "Detaylı Tema 3", "Detaylı Tema 4", "Detaylı Tema 5"],
   "timeline": [
-    {"event": "Olay Başlığı", "chapter": "İlgili Bölüm/Kısım", "importance": "Olayın önemi"}
+    {"event": "Önemli Olay", "chapter": "Bölüm Adı/Numarası", "importance": "Bunun hikaye için neden önemli olduğu"}
   ]
 }]],
 
     -- Spoiler-free prompt (Based on reading progress)
     spoiler_free = [[Kitap: "%s" - Yazar: %s
-KRİTİK: Okuyucu bu kitabın %d%% kadarını okudu. YALNIZCA bu okuma noktasına kadar olan içerik için X-Ray verisi oluştur.
+KRİTİK: Okuyucu bu kitabın yalnızca %%%d'sini okudu. YALNIZCA bu noktaya kadar olan içeriği kapsayan X-Ray verileri sağlamalısın.
 
-SPOILER ÖNLEME KURALLARI:
-1. Bu okuma noktasından SONRA ortaya çıkan karakterleri DAHİL ETME.
-2. Bu noktadan SONRA gerçekleşen olaylardan bahsetme.
-3. Kitabın ilerleyen kısımlarında gerçekleşen karakter gelişimlerini açığa çıkarma.
-4. Zaman çizelgesi olayları YALNIZCA okuyucunun okuduğu kısımları kapsamalıdır.
-5. Karakter tanımları daha sonraki gelişmeleri değil, mevcut durumlarını yansıtmalıdır.
-6. Özet YALNIZCA okuyucunun deneyimlediği olayları kapsamalıdır.
+KESİN SPOILER KURALLARI:
+1. %%%d işaretinden SONRA tanıtılan hiç bir karakteri dahil etme.
+2. %%%d işaretinden SONRA gerçekleşen hiç bir olay örgüsü, ters köşe veya ölümü dahil etme.
+3. %%%d işaretinden SONRA gerçekleşen hiç bir karakter gelişimi veya kimlik açığa çıkmasını dahil etme.
+4. "Özet" (summary) ve "zaman çizelgesi" (timeline) tam olarak %%%d noktasında durmalıdır.
+5. Karakter "açıklamaları" (descriptions) yalnızca %%%d noktasındaki durumlarını ve bilgilerini yansıtmalıdır.
 
-EK KURALLAR:
-1. Yazar biyografisi zorunludur (bu asla spoiler içermez).
-2. Tarihi şahsiyetler, halihazırda okunan kısımda bahsedilmişlerse dahil edilebilir.
-3. Konumlar yalnızca şimdiye kadar ziyaret edilen/bahsedilenler olmalıdır.
-4. Temalar hikayenin bu noktasına kadar belirgin olanları yansıtmalıdır.
+ÖĞE SAYISI KURALLARI:
+1. KARAKTERLER: Bu noktaya kadar karşılaşılan 10-15 karakteri listele.
+2. MEKANLAR: Bu noktaya kadar ziyaret edilen veya adı geçen 8-12 mekanı listele.
+3. ZAMAN ÇİZELGESİ: Halihazırda gerçekleşmiş 8-12 ana olayı listele.
 
 GEREKLİ JSON FORMATI:
 {
-  "book_title": "Kitap Başlığı",
+  "book_title": "Kitap Adı",
   "author": "Yazar Adı",
-  "author_bio": "Yazarın hayatı ve edebi kişiliği hakkında detaylı bilgi (Zorunlu)",
-  "summary": "YALNIZCA okuyucunun şimdiye kadar okuduğu kısmı kapsayan özet",
+  "author_bio": "Biyografi",
+  "summary": "YALNIZCA şimdiye kadar okunan kısmın özeti (%%%d)",
   "characters": [
     {
-      "name": "Karakter Adı (yalnızca tanıtıldıysa)",
-      "role": "Baş Kahraman / Yardımcı Karakter / Antagonist",
-      "gender": "Erkek / Kadın / Belirsiz",
-      "occupation": "Meslek veya Statü",
-      "description": "Mevcut okuma noktasındaki karakter durumu - sonraki gelişmeleri AÇIKLAMA"
+      "name": "Ad",
+      "role": "Şu an algılanan rol",
+      "gender": "Cinsiyet",
+      "occupation": "Mevcut meslek",
+      "description": "Karakterin TAM OLARAK %%%d noktasındaki durumu. Gelecekteki sırları açığa çıkarma."
     }
   ],
   "historical_figures": [
     {
-      "name": "Tarihi Kişinin Adı",
-      "role": "Gerçek Tarihteki Rolü",
-      "biography": "Kısa biyografi",
-      "importance_in_book": "Mevcut okuma noktasına kadar olan ilgisi",
-      "context_in_book": "Okunan kısımda nasıl bahsedildiği"
+      "name": "Ad",
+      "role": "Rol",
+      "biography": "Biyografi",
+      "importance_in_book": "Şimdiye kadarki önemi",
+      "context_in_book": "Bahsedilme bağlamı"
     }
   ],
   "locations": [
-    {"name": "Konum Adı (yalnızca şimdiye kadar ziyaret edildiyse/bahsedildiyse)", "description": "Açıklama", "importance": "Bu noktaya kadar olan önemi"}
+    {"name": "Ad", "description": "Açıklama", "importance": "Şimdiye kadarki önemi"}
   ],
-  "themes": ["Yalnızca şimdiye kadar hikayede belirgin olan temalar"],
+  "themes": ["Bu noktaya kadar belirgin olan temalar"],
   "timeline": [
-    {"event": "Olay Başlığı (YALNIZCA gerçekleşmiş olaylar)", "chapter": "İlgili Bölüm/Kısım", "importance": "Önem"}
+    {"event": "ZATEN gerçekleşmiş olay", "chapter": "Bölüm", "importance": "Önemi"}
   ]
 }]],
 

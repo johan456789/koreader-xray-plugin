@@ -56,19 +56,20 @@ function ChapterAnalyzer:getReflowableText(ui)
     
     -- Try to get chapter from TOC
     local toc = ui.document:getToc()
+    local default_chapter_title = ui.loc and ui.loc:t("this_chapter") or "This Chapter"
     if not toc or #toc == 0 then
         logger.info("ChapterAnalyzer: No TOC, using visible text")
-        return self:getVisibleTextReflowable(ui), "Bu Bölüm"
+        return self:getVisibleTextReflowable(ui), default_chapter_title
     end
     
     -- Find current chapter
     local current_chapter = nil
-    local chapter_title = "Bu Bölüm"
+    local chapter_title = default_chapter_title
     
     for i, chapter in ipairs(toc) do
         if chapter.page <= current_pos then
             current_chapter = chapter
-            chapter_title = chapter.title or "Bu Bölüm"
+            chapter_title = chapter.title or default_chapter_title
         else
             break
         end
@@ -76,7 +77,7 @@ function ChapterAnalyzer:getReflowableText(ui)
     
     if not current_chapter then
         logger.warn("ChapterAnalyzer: No current chapter found")
-        return self:getVisibleTextReflowable(ui), "Bu Bölüm"
+        return self:getVisibleTextReflowable(ui), default_chapter_title
     end
     
     logger.info("ChapterAnalyzer: Current chapter:", chapter_title)
@@ -246,7 +247,8 @@ function ChapterAnalyzer:getCurrentPageTextPDF(ui)
         end
     end
     
-    return text, "Bu Sayfa"
+    local default_page_title = ui.loc and ui.loc:t("this_page") or "This Page"
+    return text, default_page_title
 end
 
 -- Fallback for unknown document types
@@ -277,7 +279,8 @@ function ChapterAnalyzer:getFallbackText(ui)
         return nil, nil
     end
     
-    return text, "Bu Sayfa"
+    local default_page_title = ui.loc and ui.loc:t("this_page") or "This Page"
+    return text, default_page_title
 end
 
 -- Find characters mentioned in text
@@ -326,6 +329,97 @@ function ChapterAnalyzer:findCharactersInText(text, characters)
 end
 
 -- Count how many times a name appears
+-- Get text for analysis (from beginning to current position)
+function ChapterAnalyzer:getTextForAnalysis(ui, max_len)
+    if not ui or not ui.document then
+        return nil
+    end
+    
+    max_len = max_len or 100000 -- Match assistant.koplugin's 100k default
+    local book_text = ""
+    
+    -- Check if it's a reflowable document (EPUB, etc.)
+    local is_reflowable = ui.rolling ~= nil
+    
+    if is_reflowable then
+        local current_xp = ui.document:getXPointer()
+        if not current_xp then return nil end
+        
+        -- Start from beginning
+        ui.document:gotoPos(0)
+        local start_xp = ui.document:getXPointer()
+        
+        -- Go back to current position
+        ui.document:gotoXPointer(current_xp)
+        
+        -- Extract text
+        local success, result = pcall(function()
+            return ui.document:getTextFromXPointers(start_xp, current_xp)
+        end)
+        
+        if success and result then
+            book_text = result
+        end
+    else
+        -- For page-based documents, get text from start to current page
+        local current_page = ui.view.state.page
+        local total_pages = ui.document:getPageCount()
+        
+        -- assistant.koplugin uses 250 pages max for PDFs
+        local max_pages = 250
+        local start_page = math.max(1, current_page - max_pages)
+        
+        for page = start_page, current_page do
+            local page_text = ui.document:getPageText(page) or ""
+            if type(page_text) == "table" then
+                -- Handle structured text if returned
+                local texts = {}
+                for _, block in ipairs(page_text) do
+                    if type(block) == "table" then
+                        for i = 1, #block do
+                            local span = block[i]
+                            if type(span) == "table" and span.word then
+                                table.insert(texts, span.word)
+                            end
+                        end
+                    end
+                end
+                page_text = table.concat(texts, " ")
+            end
+            book_text = book_text .. page_text .. "\n"
+        end
+    end
+    
+    -- Limit text length
+    if #book_text > max_len then
+        -- For spoiler-free context, the part LEADING UP to the current position is most important.
+        -- We take the LAST max_len characters of what we've extracted (which ends at current position).
+        book_text = book_text:sub(-max_len)
+    end
+    
+    return book_text
+end
+
+-- Get highlights and notes for analysis
+function ChapterAnalyzer:getAnnotationsForAnalysis(ui)
+    local annotations_text = ""
+    
+    -- Try to get annotations from the document/UI
+    -- In KOReader, annotations are typically in ui.annotation.annotations
+    if ui.annotation and ui.annotation.annotations then
+        for _, annot in ipairs(ui.annotation.annotations) do
+            if annot.text and #annot.text > 0 then
+                annotations_text = annotations_text .. "Highlight: " .. annot.text .. "\n"
+            end
+            if annot.note and #annot.note > 0 then
+                annotations_text = annotations_text .. "Note: " .. annot.note .. "\n"
+            end
+        end
+    end
+    
+    return #annotations_text > 0 and annotations_text or nil
+end
+
 function ChapterAnalyzer:countMentions(text, name)
     local count = 0
     local pos = 1

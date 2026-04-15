@@ -93,7 +93,8 @@ function AIHelper:saveProviderToConfig(provider_name)
 end
 
 -- Initialize AIHelper
-function AIHelper:init()
+function AIHelper:init(path)
+    self.path = path or "plugins/xray.koplugin"
     self:loadConfig()
     self:loadModelFromFile()
     self:loadLanguage()
@@ -105,6 +106,9 @@ end
 function AIHelper:loadConfig()
     local success, config = pcall(require, "config")
     self.config_keys = { gemini = nil, chatgpt = nil }
+    -- INITIALIZE DEFAULT SETTINGS TO PREVENT CRASHES
+    self.settings = { auto_fetch_on_open = false, max_characters = 20 } 
+    
     if success and config then
         if config.gemini_api_key then 
             self.providers.gemini.api_key = config.gemini_api_key 
@@ -287,9 +291,13 @@ end
 
 -- Load prompts
 function AIHelper:loadPrompts()
-    local success, prompts = pcall(require, "prompts/" .. self.current_language)
+    -- Use dofile for absolute paths to avoid package.path issues
+    local prompt_file = self.path .. "/prompts/" .. self.current_language .. ".lua"
+    local success, prompts = pcall(dofile, prompt_file)
+    
     if not success then 
-        success, prompts = pcall(require, "prompts/en") 
+        prompt_file = self.path .. "/prompts/en.lua"
+        success, prompts = pcall(dofile, prompt_file) 
     end
     self.prompts = prompts or {}
 end
@@ -300,11 +308,20 @@ function AIHelper:createPrompt(title, author, context)
     
     local enhanced_title = title
     local enhanced_author = author or "Unknown"
+    local extra_context = ""
     
     if context then
+        if context.series then
+            local series_info = context.series
+            if context.series_index then
+                series_info = series_info .. " (Book " .. context.series_index .. ")"
+            end
+            enhanced_title = enhanced_title .. " | Series: " .. series_info
+        end
+        
         if context.filename or context.pub_year then
             enhanced_title = string.format("%s (File: %s, Year: %s)", 
-                title, 
+                enhanced_title, 
                 context.filename or "N/A", 
                 context.pub_year or "N/A")
         end
@@ -312,18 +329,45 @@ function AIHelper:createPrompt(title, author, context)
         if context.chapter_title then
             enhanced_author = enhanced_author .. " | Current Chapter: " .. context.chapter_title
         end
+        
+        if context.book_text and #context.book_text > 0 then
+            extra_context = extra_context .. "\n\nBOOK TEXT CONTEXT (Crucial for identification and progress tracking):\n" .. 
+                            "--- START OF TEXT ---\n" .. 
+                            context.book_text .. 
+                            "\n--- END OF TEXT ---\n"
+        end
+        
+        if context.annotations and #context.annotations > 0 then
+            extra_context = extra_context .. "\n\nUSER HIGHLIGHTS & NOTES (Crucial for character focus):\n" ..
+                            "--- START OF ANNOTATIONS ---\n" ..
+                            context.annotations ..
+                            "\n--- END OF ANNOTATIONS ---\n"
+        end
     end
     
     -- Use a custom prompt if context exists and you're in spoiler_free mode.
+    local final_prompt = ""
     if context and context.spoiler_free then
         local template = self.prompts.spoiler_free or self.prompts.main
-        -- Feeds Enhanced Title, Enhanced Author, Percent
-        return string.format(template, enhanced_title, enhanced_author, context.reading_percent)
+        local p = context.reading_percent
+        -- Template expects multiple %d placeholders for strict spoiler rules.
+        final_prompt = string.format(template, enhanced_title, enhanced_author, 
+            p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p, p)
+        
+        -- Add a heavy-handed instruction to use the provided text
+        final_prompt = final_prompt .. "\n\nSTRICT INSTRUCTION: Your primary source is the 'BOOK TEXT CONTEXT' and 'USER HIGHLIGHTS' provided above. You MUST NOT reveal any information that is not supported by this text or that obviously happens later in the book. If the text provided does not show a character's secret, DO NOT mention it."
     else
         -- Normal prompt for the full book
         local template = self.prompts.main
-        return string.format(template, enhanced_title, enhanced_author)
+        final_prompt = string.format(template, enhanced_title, enhanced_author)
     end
+    
+    -- Append extra context if available
+    if #extra_context > 0 then
+        final_prompt = final_prompt .. extra_context
+    end
+    
+    return final_prompt
 end
 
 function AIHelper:getFallbackStrings()
@@ -431,7 +475,7 @@ function AIHelper:callChatGPT(prompt, config)
     local model = config.model or "gpt-4o-mini"
     local url = config.endpoint or "https://api.openai.com/v1/chat/completions"
     
-    -- System instruction ekle (eğer prompts'ta varsa)
+    -- Add system instruction (if exists in prompts)
     local system_instruction = self.prompts and self.prompts.system_instruction or 
         "You are an expert literary critic. Respond ONLY with valid JSON format."
     
@@ -450,7 +494,7 @@ function AIHelper:callChatGPT(prompt, config)
         temperature = 0.4,
         max_tokens = 8192,
         top_p = 0.95,
-        response_format = { type = "json_object" } -- JSON mode zorla
+        response_format = { type = "json_object" } -- Enforce JSON mode
     })
     
     logger.info("AIHelper: ChatGPT request size:", #request_body)
@@ -494,10 +538,10 @@ function AIHelper:callChatGPT(prompt, config)
             if data and data.choices and data.choices[1] then
                 local choice = data.choices[1]
                 
-                -- Finish reason kontrolü
+                -- Check finish reason
                 if choice.finish_reason == "content_filter" then
                     logger.warn("AIHelper: BLOCKED BY CONTENT FILTER")
-                    return nil, "error_safety", "OpenAI içerik filtresi engelledi."
+                    return nil, "error_safety", "Blocked by OpenAI Content Filter."
                 end
                 
                 if choice.message and choice.message.content then
@@ -506,19 +550,19 @@ function AIHelper:callChatGPT(prompt, config)
                     return self:parseAIResponse(content)
                 else
                     logger.warn("AIHelper: No content in ChatGPT response")
-                    return nil, "error_api", "API boş yanıt döndürdü."
+                    return nil, "error_api", "API returned empty response."
                 end
             else
-                -- Hata mesajı varsa logla
+                -- Log error message if exists
                 if data and data.error then
                     logger.warn("AIHelper: ChatGPT API Error:", data.error.message or "Unknown")
-                    return nil, "error_api", data.error.message or "API Hatası"
+                    return nil, "error_api", data.error.message or "API Error"
                 end
-                return nil, "error_api", "Geçersiz yanıt formatı"
+                return nil, "error_api", "Invalid response format"
             end
         elseif code_num == 429 then
             logger.warn("AIHelper: 429 Rate Limit (Retrying...)")
-            -- Rate limit için daha uzun bekle
+            -- Wait longer for rate limit
             if attempt <= max_retries then
                 local socket = require("socket")
                 socket.sleep(5)
@@ -526,24 +570,24 @@ function AIHelper:callChatGPT(prompt, config)
         elseif code_num == 503 or code_num == 502 then
             logger.warn("AIHelper: " .. code_num .. " Service Error (Retrying...)")
         elseif code_num == 401 then
-            return nil, "error_401", "API anahtarı geçersiz"
+            return nil, "error_401", "Invalid API key"
         else
             logger.warn("AIHelper: Unexpected error code:", code_num)
-            return nil, "error_" .. tostring(code_num), "Hata Kodu: " .. tostring(code_num)
+            return nil, "error_" .. tostring(code_num), "Error Code: " .. tostring(code_num)
         end
     end
     
-    return nil, "error_timeout", "Zaman aşımı"
+    return nil, "error_timeout", "Timeout"
 end
 
 function AIHelper:parseAIResponse(text)
-    -- Temizlik
+    -- Cleaning
     local json_text = text:gsub("```json", ""):gsub("```", ""):gsub("^%s+", ""):gsub("%s+$", "")
     
     -- Parse
     local success, data = pcall(json.decode, json_text)
     
-    -- Eğer başarısızsa, {} arasını bulmaya çalış
+    -- If failed, try to find text between {}
     if not success then
         local first = json_text:find("{")
         local last_brace = nil
@@ -570,13 +614,13 @@ function AIHelper:validateAndCleanData(data)
         return (type(v) == "string" and #v > 0) and v or d or ""
     end
 
-    -- 1. YAZAR & KİTAP (Akıllı Eşleşme)
+    -- 1. AUTHOR & BOOK (Smart Match)
     data.book_title = data.book_title or data.title or strings.unknown_book
     data.author = data.author or data.book_author or strings.unknown_author
     data.author_bio = data.author_bio or data.AuthorBio or data.bio or ""
     data.summary = data.summary or data.book_summary or ""
 
-    -- 2. KARAKTERLER
+    -- 2. CHARACTERS
     local chars = data.characters or data.Characters or {}
     local valid_chars = {}
     for _, c in ipairs(chars) do
@@ -592,7 +636,7 @@ function AIHelper:validateAndCleanData(data)
     end
     data.characters = valid_chars
 
-    -- 3. TARİHİ KİŞİLİKLER
+    -- 3. HISTORICAL FIGURES
     local hists = data.historical_figures or data.historicalFigures or {}
     local valid_hists = {}
     for _, h in ipairs(hists) do
@@ -601,14 +645,14 @@ function AIHelper:validateAndCleanData(data)
                 name = ensureString(h.name or h.Name, strings.unnamed_person),
                 biography = ensureString(h.biography or h.bio, strings.no_biography),
                 role = ensureString(h.role, ""),
-                importance_in_book = ensureString(h.importance_in_book or h.importance, "Kitapta geçiyor"),
-                context_in_book = ensureString(h.context_in_book or h.context, "Dönemsel referans")
+                importance_in_book = ensureString(h.importance_in_book or h.importance, "Mentioned in book"),
+                context_in_book = ensureString(h.context_in_book or h.context, "Historical reference")
             })
         end
     end
     data.historical_figures = valid_hists
 
-    -- 4. DİĞERLERİ
+    -- 4. OTHERS
     data.locations = data.locations or {}
     data.themes = data.themes or {}
     data.timeline = data.timeline or {}

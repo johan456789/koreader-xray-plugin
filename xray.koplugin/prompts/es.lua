@@ -1,96 +1,98 @@
 return {
     -- System instruction
-    system_instruction = "Eres un crítico literario experto. Tu respuesta debe estar ÚNICAMENTE en formato JSON válido. No utilices Markdown, frases introductorias ni explicaciones adicionales.",
+    system_instruction = "Eres un experto crítico literario e investigador. Tu respuesta debe estar ÚNICAMENTE en formato JSON válido. No incluyas ningún texto fuera de la estructura JSON. Asegúrate de que los datos sean altamente precisos y se refieran estrictamente al libro especificado.",
     
     -- Main prompt (Full book analysis)
     main = [[Libro: "%s" - Autor: %s
-Crea datos detallados de Rayos X para este libro. Completa el formato JSON de abajo COMPLETAMENTE.
-REGLAS:
-1. No te desvíes del formato JSON.
-2. El campo \"author_bio\" es OBLIGATORIO; escribe 2-3 frases sobre el autor.
-3. PERSONAJES: Enumera al menos 15-20 personajes (protagonistas y secundarios).
-4. PERSONAJES HISTÓRICOS: Encuentra personajes históricos REALES mencionados en el libro o que influyan en la época. Si no hay, no lo dejes vacío; añade el rey/líder de la época como \"Figura del período\"
-5. DETAILS: Nunca dejes los campos \"importance_in_book\" y \"context_in_book\" vacíos. Analiza el contexto dentro del libro.
+Crea datos detallados de X-Ray para este libro. Completa el formato JSON a continuación TOTALMENTE.
+
+REGLAS PRINCIPALES:
+1. SOLO incluye datos de ESTE libro. Usa el título, autor y nombre de archivo proporcionados para asegurarte de analizar la obra correcta.
+2. PERSONAJES: Enumera al menos 15-20 personajes. Incluye a todos los protagonistas, personajes secundarios importantes y figuras menores notables.
+3. UBICACIONES: Enumera al menos 10-15 ubicaciones significativas descritas en el libro.
+4. FIGURAS HISTÓRICAS: Identifica al menos 5-10 figuras históricas del mundo real mencionadas o relevantes para el entorno. Si es un mundo ficticio, enumera figuras legendarias o históricas importantes de la historia de ese mundo.
+5. DETALLES: Proporciona descripciones ricas y fácticas. Evita generalizaciones vagas.
+6. JSON: La salida DEBE ser un único objeto JSON válido.
+
 FORMATO JSON REQUERIDO:
 {
-  "book_title": "Título del libro",
+  "book_title": "Título completo del libro",
   "author": "Nombre del autor",
-  "author_bio": "Información detallada sobre la vida y personalidad literaria del autor (obligatorio)",
-  "summary": "Resumen completo del libro (visión general sin spoilers)",
+  "author_bio": "Biografía detallada del autor, centrándose en su estilo y esta obra específica.",
+  "summary": "Resumen completo de la premisa y la trama del libro (Sin spoilers).",
   "characters": [
     {
       "name": "Nombre del personaje",
-      "role": "Protagonista / Personaje secundario / Antagonista",
-      "gender": "Masculino / Femenino / Ambiguo",
-      "occupation": "Ocupación o estatus",
-      "description": "Análisis detallado y rasgos de personalidad del personaje"
+      "role": "Protagonista / Secundario / Antagonista",
+      "gender": "Masculino / Femenino / Otro",
+      "occupation": "Estado o trabajo",
+      "description": "Análisis detallado del personaje de 3-4 frases, incluyendo personalidad e importancia."
     }
   ],
   "historical_figures": [
     {
-      "name": "Nombre del personaje histórico",
-      "role": "Rol en la historia real (ej. emperador, filósofo)",
-      "biography": "Breve biografía",
-      "importance_in_book": "¿Cuál es la importancia de esta persona en el libro? ¿Por qué se menciona?",
-      "context_in_book": "¿Cómo mencionan los personajes a esta persona? ¿En qué contexto aparece?"
+      "name": "Nombre de la figura",
+      "role": "Rol histórico",
+      "biography": "Biografía corta",
+      "importance_in_book": "Por qué se mencionan en este libro específico",
+      "context_in_book": "La escena o discusión específica donde aparecen"
     }
   ],
   "locations": [
-    {"name": "Nombre del lugar","description": "Descripción del lugar", "importance": "Relevancia en la historia"
+    {"name": "Nombre de la ubicación", "description": "Descripción visual y atmosférica", "importance": "Significancia narrativa"}
   ],
-  "themes": ["Tema 1", "Tema 2", "Tema 3", "Tema 4", "Tema 5"],
+  "themes": ["Tema detallado 1", "Tema detallado 2", "Tema detallado 3", "Tema detallado 4", "Tema detallado 5"],
   "timeline": [
-    {"event": "Título del evento", "chapter": "Capítulo/Sección relevante", "importance": "Relevancia del evento"}
+    {"event": "Punto clave de la trama", "chapter": "Nombre/Número del capítulo", "importance": "Por qué esto es importante para la historia"}
   ]
 }]],
 
     -- Spoiler-free prompt (Based on reading progress)
     spoiler_free = [[Libro: "%s" - Autor: %s
-CRÍTICO: El lector ha leído %d%% de este libro. Crea datos de X-Ray SOLO para el contenido hasta este punto de lectura.
-REGLAS DE PREVENCIÓN DE SPOILERS:
-1. NO incluyas personajes que aparezcan DESPUÉS de este punto de lectura
-2. NO menciones eventos de la trama que ocurran DESPUÉS de este punto
-3. NO reveles desarrollos de personajes que sucedan más adelante
-4. Los eventos de la cronología deben cubrir SOLO lo que el lector ya ha leído
-5. Las descripciones de personajes deben reflejar su estado actual, no desarrollos posteriores
-6. El resumen debe cubrir SOLO los eventos que el lector ya haya experimentado
+CRÍTICO: El lector solo ha leído el %d%% de este libro. DEBES proporcionar datos de X-Ray que cubran ÚNICAMENTE el contenido hasta este punto.
 
-REGLAS ADICIONALES:
-1. La biografía del autor es obligatoria (esto nunca contiene spoilers)
-2. Se pueden incluir personajes históricos si se mencionan en la parte ya leída
-3. Los lugares deben ser solo aquellos visitados/mencionados hasta ahora
-4. Los temas deben reflejar lo que es evidente en la historia hasta este punto
+REGLAS ESTRICTAS CONTRA SPOILERS:
+1. NO incluyas personajes que se presenten DESPUÉS de la marca del %d%%.
+2. NO incluyas eventos de la trama, giros o muertes que ocurran DESPUÉS de la marca del %d%%.
+3. NO reveles desarrollos de personajes o revelaciones de identidad que sucedan DESPUÉS de la marca del %d%%.
+4. El "resumen" y la "línea de tiempo" deben detenerse exactamente en el punto del %d%%.
+5. Las "descripciones" de los personajes solo deben reflejar su estado y conocimiento en el punto del %d%%.
+
+REGLAS DE CONTEO DE ELEMENTOS:
+1. PERSONAJES: Enumera 10-15 personajes encontrados hasta este punto.
+2. UBICACIONES: Enumera 8-12 ubicaciones visitadas o mencionadas hasta este punto.
+3. LÍNEA DE TIEMPO: Enumera 8-12 eventos importantes que ya hayan ocurrido.
 
 FORMATO JSON REQUERIDO:
 {
   "book_title": "Título del libro",
   "author": "Nombre del autor",
-  "author_bio": "Información detallada sobre la vida y personalidad literaria del autor (obligatorio)",
-  "summary": "Resumen que cubre SOLO lo que el lector ha leído hasta ahora",
+  "author_bio": "Biografía",
+  "summary": "Resumen de ÚNICAMENTE la parte leída hasta ahora (%d%%)",
   "characters": [
     {
-      "name": "Nombre del personaje (solo si ya fue introducido)",
-      "role": "Protagonista / Personaje secundario / Antagonista",
-      "gender": "Masculino / Femenino / Ambiguo",
-      "occupation": "Ocupación o estatus",
-      "description": "Estado del personaje en el punto actual de lectura - NO revelar desarrollos posteriores"
+      "name": "Nombre",
+      "role": "Rol percibido actual",
+      "gender": "Género",
+      "occupation": "Ocupación actual",
+      "description": "Estado del personaje EXACTAMENTE en la marca del %d%%. NO reveles secretos futuros."
     }
   ],
   "historical_figures": [
     {
-      "name": "Nombre de la persona histórica",
-      "role": "Rol en la historia real",
-      "biography": "Breve biografía",
-      "importance_in_book": "Su relevancia hasta el punto actual de lectura",
-      "context_in_book": "Cómo se menciona en la parte ya leída"
+      "name": "Nombre",
+      "role": "Rol",
+      "biography": "Bio",
+      "importance_in_book": "Significancia hasta ahora",
+      "context_in_book": "Contexto de la mención"
     }
   ],
   "locations": [
-    {"name": "Nombre del lugar (solo si ya fue visitado/mencionado)", "description": "Descripción", "importance": "Relevancia hasta este punto"}
+    {"name": "Nombre", "description": "Descripción", "importance": "Significancia hasta ahora"}
   ],
-  "themes": ["Solo temas evidentes en la historia hasta ahora"],
+  "themes": ["Temas evidentes hasta este punto"],
   "timeline": [
-    {"event": "Título del evento (SOLO eventos que ya ocurrieron)", "chapter": "Capítulo/Sección relevante", "importance": "Relevancia"}
+    {"event": "Evento que YA sucedió", "chapter": "Capítulo", "importance": "Significancia"}
   ]
 }]],
 
@@ -102,6 +104,6 @@ FORMATO JSON REQUERIDO:
         not_specified = "No especificado",
         no_description = "Sin descripción",
         unnamed_person = "Persona sin nombre",
-        no_biography = "Sin biografía"
+        no_biography = "Biografía no disponible"
     }
 }

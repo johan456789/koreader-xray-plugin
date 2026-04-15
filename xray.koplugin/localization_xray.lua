@@ -81,8 +81,14 @@ function Localization:parsePO(filepath)
 end
 
 -- Initialize localization system
-function Localization:init()
+function Localization:init(path)
     logger.info("Localization: Initializing...")
+    
+    -- Use provided path or hardcoded default
+    self.path = path or "plugins/xray.koplugin"
+    
+    -- Robust path handling for Windows/Unix
+    self.path = self.path:gsub("\\", "/")
     
     -- Discover available language files
     self:discoverLanguages()
@@ -98,15 +104,25 @@ end
 
 -- Discover available .po files
 function Localization:discoverLanguages()
-    local plugin_dir = "plugins/xray.koplugin"
-    local lang_dir = plugin_dir .. "/languages"
+    local lang_dir = self.path .. "/languages"
     
     self.available_languages = {}
     
     local attr = lfs.attributes(lang_dir)
     if not attr or attr.mode ~= "directory" then
         logger.warn("Localization: Languages directory not found:", lang_dir)
-        return
+        -- Try fallback to hardcoded path if current path failed
+        if self.path ~= "plugins/xray.koplugin" then
+            self.path = "plugins/xray.koplugin"
+            lang_dir = self.path .. "/languages"
+            attr = lfs.attributes(lang_dir)
+            if not attr or attr.mode ~= "directory" then
+                logger.error("Localization: Languages directory NOT found even with fallback!")
+                return
+            end
+        else
+            return
+        end
     end
     
     for file in lfs.dir(lang_dir) do
@@ -125,8 +141,7 @@ end
 
 -- Load translations from .po file
 function Localization:loadTranslations()
-    local plugin_dir = "plugins/xray.koplugin"
-    local po_file = plugin_dir .. "/languages/" .. self.current_language .. ".po"
+    local po_file = self.path .. "/languages/" .. self.current_language .. ".po"
     
     logger.info("Localization: Loading translations from:", po_file)
     
@@ -136,13 +151,13 @@ function Localization:loadTranslations()
         self.translations = translations
         logger.info("Localization: Loaded", self:tableSize(translations), "translations")
     else
-        logger.warn("Localization: Failed to load .po file")
+        logger.warn("Localization: Failed to load .po file:", po_file)
         
         -- Fallback to English
         if self.current_language ~= "en" then
             logger.info("Localization: Falling back to English")
             self.current_language = "en"
-            po_file = plugin_dir .. "/languages/en.po"
+            po_file = self.path .. "/languages/en.po"
             translations = self:parsePO(po_file)
             if translations then
                 self.translations = translations
@@ -150,6 +165,8 @@ function Localization:loadTranslations()
                 self.translations = {}
                 logger.error("Localization: Failed to load fallback!")
             end
+        else
+            self.translations = {}
         end
     end
 end
@@ -179,19 +196,25 @@ function Localization:t(key, ...)
     end
     
     -- Format with arguments
-    if select('#', ...) > 0 then
-        local success, result = pcall(string.format, translation, ...)
+    local arg_count = select('#', ...)
+    if arg_count > 0 then
+        -- Convert nil arguments to "???" to avoid string.format errors
+        local args = {}
+        for i = 1, arg_count do
+            local arg = select(i, ...)
+            if arg == nil then
+                args[i] = "???"
+            else
+                args[i] = arg
+            end
+        end
+        
+        local success, result = pcall(string.format, translation, (unpack or table.unpack)(args))
         if success then
             return result
         else
             logger.warn("Localization: Format error for key:", key)
             logger.warn("Localization: Error:", result)
-            logger.warn("Localization: Args count:", select('#', ...))
-            -- Print arguments for debugging
-            for i = 1, select('#', ...) do
-                local arg = select(i, ...)
-                logger.warn("Localization: Arg", i, "type:", type(arg), "value:", tostring(arg))
-            end
             return translation
         end
     end

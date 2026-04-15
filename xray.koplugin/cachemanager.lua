@@ -142,7 +142,7 @@ function CacheManager:loadCache(book_path)
         return nil
     end
     
-    -- Cache age check removed - cache is now永久 (永久 = permanent)
+    -- Cache age check removed - cache is now permanent
     -- Cache will stay valid forever unless manually cleared
     
     logger.info("CacheManager: Loaded cache from:", cache_file)

@@ -2,26 +2,26 @@
 
 return {
     -- Google Gemini API Key
-    -- API key almak için: https://makersuite.google.com/app/apikey
-    gemini_api_key = "AIzaSy----",  -- Buraya API keyinizi yazın: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+    -- To get an API key: https://makersuite.google.com/app/apikey
+    gemini_api_key = "AIzaSy----",  -- Enter your API key here: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
     
-    -- Gemini Model Seçimi
+    -- Gemini Model Selection
     -- "gemini-2.5-flash"
     -- "gemini-2.5-pro"
     -- "gemini-3.0-preview"
     gemini_model = "gemini-2.5-flash",
     
     -- ChatGPT API Key 
-    -- API key almak için: https://platform.openai.com/api-keys
-    chatgpt_api_key = "sk-XXXX",  -- Buraya API keyinizi yazın: "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+    -- To get an API key: https://platform.openai.com/api-keys
+    chatgpt_api_key = "sk-XXXX",  -- Enter your API key here: "sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
     
-    -- Varsayılan AI Sağlayıcı
+    -- Default AI Provider
     default_provider = "gemini",
     
-    -- Ayarlar
+    -- Settings
     settings = {
-        auto_fetch_on_open = false,  -- Kitap açılınca otomatik veri çeksin mi?
-        cache_duration_days = -1,    -- Cache süresiz geçerli! 
-        max_characters = 20,         -- Maksimum kaç karakter gösterilsin?
+        auto_fetch_on_open = false,  -- Automatically fetch data when a book is opened?
+        cache_duration_days = -1,    -- Cache is valid indefinitely! 
+        max_characters = 20,         -- Maximum number of characters to show?
     }
 }
