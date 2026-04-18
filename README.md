@@ -11,11 +11,14 @@ The prompts are designed to be spoiler-free based on your current reading progre
 
 ## Features
 
+- **X-Ray Selection Mode:** Adds an "X-Ray" button to the dictionary and text selection menus. Highlight a name or location on the page to instantly see its description without leaving your book.
 - **Character Tracking:** Automatically extracts character names, roles, and descriptions. 
-- **Context & Lore:** Generates a timeline of key events, identifies real historical figures mentioned in the text (along with brief biographies), and lists important locations.
+- **Sequential Timelines:** Generates a strictly chronological timeline of key events (one per chapter), making it easy to catch up on the plot.
+- **Context & Lore:** Identifies real historical figures mentioned in the text (along with brief biographies) and lists important locations.
+- **Robust AI Fetching:** Automatically retries failed requests using secondary and lighter models (Flash -> Pro -> 8b) to ensure you always get your data.
+- **Kindle Optimized:** UI designed specifically for stability and performance on older e-ink hardware like the Kindle Paperwhite 1.
 - **Spoiler-Free:** The AI is instructed to avoid revealing major plot twists beyond your current reading progress.
-- **Local Caching:** Data is fetched once and saved locally per book. It never expires and works completely offline after the initial setup.
-- **Multiple AI Providers:** Supports Google Gemini (free tier works great) and OpenAI's ChatGPT.
+- **Local Caching:** Data is fetched once and saved locally per book. It works completely offline after the initial setup.
 - **Multilingual:** Supports interface and AI responses in English, Turkish, Portuguese, and Spanish.
 
 ## Setup
