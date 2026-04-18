@@ -139,7 +139,9 @@ end
 -- Build all possible HTTP request parameters (primary and fallback) for a comprehensive fetch.
 -- Returns: { {url, headers, body, provider, model}, ... } or nil, error_code, error_msg
 function AIHelper:buildComprehensiveRequest(title, author, context)
-    local prompt = self:createPrompt(title, author, context, "comprehensive_xray")
+    local section_name = "comprehensive_xray"
+    local prompt = self:createPrompt(title, author, context, section_name)
+    local schema = self:getStructuredOutputSchema(section_name)
     local primary = self.settings.primary_ai or { provider = "gemini", model = "gemini-2.5-flash" }
     local secondary = self.settings.secondary_ai or { provider = "gemini", model = "gemini-2.5-flash-lite" }
 
@@ -153,7 +155,7 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
                 local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
                 url = "https://generativelanguage.googleapis.com/v1beta/models/" .. model .. ":generateContent"
                 headers = { ["Content-Type"] = "application/json", ["x-goog-api-key"] = config.api_key }
-                body = json.encode({
+                local request_payload = {
                     contents = {{ role = "user", parts = {{ text = prompt }} }},
                     system_instruction = { parts = {{ text = system_instruction_text }} },
                     safetySettings = {
@@ -163,7 +165,12 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
                         { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_NONE" }
                     },
                     generationConfig = { temperature = 0.2, maxOutputTokens = 16384 }
-                })
+                }
+                if schema and self:supportsGeminiStructuredOutput(model) then
+                    request_payload.generationConfig.responseMimeType = "application/json"
+                    request_payload.generationConfig.responseJsonSchema = schema
+                end
+                body = json.encode(request_payload)
             else
                 local model = ai.model or "gpt-4o-mini"
                 url = config.endpoint or "https://api.openai.com/v1/chat/completions"
@@ -807,7 +814,89 @@ function AIHelper:createPrompt(title, author, context, section_name, targeted_wo
     return final_prompt
 end
 
-function AIHelper:executeUnifiedRequest(prompt)
+function AIHelper:getStructuredOutputSchema(section_name)
+    local function schemaObject(properties, required)
+        return {
+            type = "object",
+            properties = properties,
+            required = required,
+            additionalProperties = false,
+        }
+    end
+
+    local function schemaArray(item_schema)
+        return {
+            type = "array",
+            items = item_schema,
+        }
+    end
+
+    local character_item = schemaObject({
+        name = { type = "string" },
+        role = { type = "string" },
+        gender = { type = "string" },
+        occupation = { type = "string" },
+        description = { type = "string" },
+    }, { "name", "role", "gender", "occupation", "description" })
+
+    local historical_figure_item = schemaObject({
+        name = { type = "string" },
+        role = { type = "string" },
+        biography = { type = "string" },
+        importance_in_book = { type = "string" },
+        context_in_book = { type = "string" },
+    }, { "name", "role", "biography", "importance_in_book", "context_in_book" })
+
+    local location_item = schemaObject({
+        name = { type = "string" },
+        description = { type = "string" },
+        importance = { type = "string" },
+    }, { "name", "description", "importance" })
+
+    local timeline_item = schemaObject({
+        chapter = { type = "string" },
+        event = { type = "string" },
+    }, { "chapter", "event" })
+
+    if section_name == "author_only" then
+        return schemaObject({
+            author = { type = "string" },
+            author_bio = { type = "string" },
+            author_birth = { type = "string" },
+            author_death = { type = "string" },
+        }, { "author", "author_bio", "author_birth", "author_death" })
+    elseif section_name == "character_section" or section_name == "more_characters" then
+        return schemaObject({
+            characters = schemaArray(character_item),
+            historical_figures = schemaArray(historical_figure_item),
+        }, { "characters", "historical_figures" })
+    elseif section_name == "location_section" then
+        return schemaObject({
+            locations = schemaArray(location_item),
+        }, { "locations" })
+    elseif section_name == "timeline_section" then
+        return schemaObject({
+            timeline = schemaArray(timeline_item),
+        }, { "timeline" })
+    elseif section_name == "comprehensive_xray" then
+        return schemaObject({
+            characters = schemaArray(character_item),
+            historical_figures = schemaArray(historical_figure_item),
+            locations = schemaArray(location_item),
+            timeline = schemaArray(timeline_item),
+        }, { "characters", "historical_figures", "locations", "timeline" })
+    end
+
+    return nil
+end
+
+function AIHelper:supportsGeminiStructuredOutput(model)
+    local unsupported_models = {
+    }
+    return not unsupported_models[model]
+end
+
+function AIHelper:executeUnifiedRequest(prompt, schema)
     local primary = self.settings.primary_ai or { provider = "gemini", model = "gemini-2.5-flash" }
     local secondary = self.settings.secondary_ai or { provider = "gemini", model = "gemini-2.5-flash-lite" }
     
@@ -823,7 +912,7 @@ function AIHelper:executeUnifiedRequest(prompt)
             self:log("AIHelper: Trying unified fallback model: " .. ai.provider .. " / " .. ai.model)
             local result, err_code, err_msg
             if ai.provider == "gemini" then
-                result, err_code, err_msg = self:callGemini(prompt, config, ai.model)
+                result, err_code, err_msg = self:callGemini(prompt, config, ai.model, schema)
             else
                 result, err_code, err_msg = self:callChatGPT(prompt, config, ai.model)
             end
@@ -838,12 +927,15 @@ end
 
 function AIHelper:getBookDataSection(title, author, provider_name, context, section_name)
     local prompt = self:createPrompt(title, author, context, section_name)
-    return self:executeUnifiedRequest(prompt)
+    local schema = self:getStructuredOutputSchema(section_name)
+    return self:executeUnifiedRequest(prompt, schema)
 end
 
 function AIHelper:getAuthorData(title, author, provider_name, context)
-    local prompt = self:createPrompt(title, author, context, "author_only")
-    return self:executeUnifiedRequest(prompt)
+    local section_name = "author_only"
+    local prompt = self:createPrompt(title, author, context, section_name)
+    local schema = self:getStructuredOutputSchema(section_name)
+    return self:executeUnifiedRequest(prompt, schema)
 end
 
 function AIHelper:getMoreCharacters(title, author, provider_name, context)
@@ -851,8 +943,10 @@ function AIHelper:getMoreCharacters(title, author, provider_name, context)
 end
 
 function AIHelper:getBookDataComprehensive(title, author, provider_name, context)
-    local prompt = self:createPrompt(title, author, context, "comprehensive_xray")
-    return self:executeUnifiedRequest(prompt)
+    local section_name = "comprehensive_xray"
+    local prompt = self:createPrompt(title, author, context, section_name)
+    local schema = self:getStructuredOutputSchema(section_name)
+    return self:executeUnifiedRequest(prompt, schema)
 end
 
 function AIHelper:lookupSingleWord(text, context)
@@ -860,17 +954,22 @@ function AIHelper:lookupSingleWord(text, context)
     return self:executeUnifiedRequest(prompt)
 end
 
-function AIHelper:callGemini(prompt, config, current_model)
+function AIHelper:callGemini(prompt, config, current_model, schema)
     current_model = current_model or "gemini-2.0-flash"
     local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
     self:log("AIHelper: Gemini Prompt prepared")
-    
+
     local url = "https://generativelanguage.googleapis.com/v1beta/models/" .. current_model .. ":generateContent"
-    local request_body = json.encode({
+    local request_payload = {
         contents = {{ role = "user", parts = {{ text = prompt }} }},
         system_instruction = { parts = {{ text = system_instruction_text }} },
         generationConfig = { temperature = 0.2, maxOutputTokens = 16384 }
-    })
+    }
+    if schema and self:supportsGeminiStructuredOutput(current_model) then
+        request_payload.generationConfig.responseMimeType = "application/json"
+        request_payload.generationConfig.responseJsonSchema = schema
+    end
+    local request_body = json.encode(request_payload)
     self:log("AIHelper: Sending Gemini request (" .. #request_body .. " bytes)")
     local ok, code, response_text, status = self:makeRequest(url, { ["Content-Type"] = "application/json", ["x-goog-api-key"] = config.api_key }, request_body)
     local code_num = tonumber(code)
