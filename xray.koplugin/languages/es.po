@@ -63,7 +63,25 @@ msgid "menu_clear_cache"
 msgstr "Borrar caché"
 
 msgid "menu_xray_mode"
-msgstr "Modo X-Ray:"
+msgstr "Ajustes del Modo X-Ray"
+
+msgid "xray_mode_desc"
+msgstr "Añade un botón 'X-Ray' a los menús de diccionario y selección para consultas instantáneas."
+
+msgid "xray_mode_toggle"
+msgstr "Modo de Selección X-Ray"
+
+msgid "xray_enabled_label"
+msgstr "Activado"
+
+msgid "xray_disabled_label"
+msgstr "Desactivado"
+
+msgid "no_data_prompt"
+msgstr "No se encontraron datos de X-Ray para este libro. ¿Desea obtenerlos de la IA ahora?"
+
+msgid "close"
+msgstr "Cerrar"
 
 msgid "menu_language"
 msgstr "Idioma"
@@ -279,7 +297,7 @@ msgid "dont_touch"
 msgstr "No toque la pantalla."
 
 msgid "ai_fetch_failed"
-msgstr "¡Error al obtener datos desde la IA!\n\nPosibles razones:\n• Clave de API inválida\n• Sin conexión a internet\n• Límite de la API excedido"
+msgstr "¡Error al obtener datos desde la IA!\n\nPosibles razones:\n• Clave de API inválida\n• Sin conexión a internet\n• Límite de la IA excedido"
 
 msgid "ai_fetch_complete"
 msgstr ""
@@ -334,7 +352,7 @@ msgid "search_button"
 msgstr "Buscar"
 
 msgid "character_not_found"
-msgstr "Personaje no encontrado: %s\n\nSugerencia: escriba parte del nombre"
+msgstr "Personaje no encontrado: %s\n\Sugerencia: escriba parte del nombre"
 
 # ==============================
 # TIMELINE & CHAPTER
@@ -463,7 +481,7 @@ msgstr "Configure primero la clave API"
 # ==============================
 
 msgid "fetch_successful"
-msgstr "Obtención exitosa"
+msgstr "Éxito al obtener datos"
 
 msgid "fetch_button"
 msgstr "Obtener"

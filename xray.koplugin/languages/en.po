@@ -63,7 +63,25 @@ msgid "menu_clear_cache"
 msgstr "Clear Cache"
 
 msgid "menu_xray_mode"
-msgstr "X-Ray Mode:"
+msgstr "X-Ray Mode Settings"
+
+msgid "xray_mode_desc"
+msgstr "Adds an 'X-Ray' button to dictionary and selection menus for instant lookups."
+
+msgid "xray_mode_toggle"
+msgstr "Enable X-Ray Selection Mode"
+
+msgid "xray_enabled_label"
+msgstr "Enabled"
+
+msgid "xray_disabled_label"
+msgstr "Disabled"
+
+msgid "no_data_prompt"
+msgstr "No X-Ray data found for this book. Would you like to fetch it from AI now?"
+
+msgid "close"
+msgstr "Close"
 
 msgid "menu_language"
 msgstr "Language"

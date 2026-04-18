@@ -28,6 +28,10 @@ function XRayPlugin:init()
     self.ai_helper = AIHelper
     self.ai_helper:init(self.path)
     self.ai_provider = self.ai_helper.default_provider or "gemini"
+
+    -- Modular lookup logic for text selection
+    local LookupManager = require("lookupmanager")
+    self.lookup_manager = LookupManager:new(self)
     
     self:log("XRayPlugin: Initialized with language: " .. self.loc:getLanguage())
     self:onDispatcherRegisterActions()
@@ -39,9 +43,42 @@ function XRayPlugin:init()
                 event = "ShowXRayMenu",
             },
         })
+
+        -- Hook into Highlight Dialog (long-press on existing highlights)
+        if self.ui.highlight then
+            self.ui.highlight:addToHighlightDialog("xray_lookup", function(_reader_highlight_instance)
+                if not self.xray_mode_enabled then return end
+                return {
+                    text = "X-Ray",
+                    callback = function()
+                        self.lookup_manager:handleLookup(_reader_highlight_instance.selected_text.text)
+                    end,
+                }
+            end)
+        end
     end
     
     logger.info("XRayPlugin: Initialized with language:", self.loc:getLanguage())
+end
+
+-- Hook for Dictionary/Selection Popup (single word)
+function XRayPlugin:onDictButtonsReady(dict_popup, dict_buttons)
+    if not self.xray_mode_enabled then return end
+    
+    local xray_button = {
+        text = "X-Ray",
+        callback = function()
+            self.lookup_manager:handleLookup(dict_popup.word)
+        end,
+    }
+
+    -- KOReader expects rows of buttons. Wrap our button in a row.
+    -- We insert it at index 2 (usually the second row) to ensure it's visible.
+    if #dict_buttons >= 1 then
+        table.insert(dict_buttons, 2, { xray_button })
+    else
+        table.insert(dict_buttons, { xray_button })
+    end
 end
 
 function XRayPlugin:log(msg)
@@ -215,7 +252,7 @@ function XRayPlugin:addToMainMenu(menu_items)
                 separator = true,
             },
             {
-                text = self.loc:t("menu_xray_mode") .. " " .. (self.xray_mode_enabled and self.loc:t("xray_mode_active") or self.loc:t("xray_mode_inactive")),
+                text = self.loc:t("menu_xray_mode"),
                 keep_menu_open = true,
                 callback = function() self:toggleXRayMode() end,
             },
@@ -510,8 +547,55 @@ function XRayPlugin:clearCache()
 end
 
 function XRayPlugin:toggleXRayMode()
-    self.xray_mode_enabled = not self.xray_mode_enabled
-    UIManager:show(InfoMessage:new{ text = self.loc:t("menu_xray_mode") .. " " .. (self.xray_mode_enabled and self.loc:t("xray_mode_active") or self.loc:t("xray_mode_inactive")), timeout = 3 })
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local info_dialog
+    
+    local function showSettings()
+        if info_dialog then UIManager:close(info_dialog) end
+        
+        info_dialog = ButtonDialog:new{
+            title = self.loc:t("menu_xray_mode") or "X-Ray Mode Settings",
+            text = self.loc:t("xray_mode_desc"),
+            buttons = {
+                {
+                    {
+                        text = (self.xray_mode_enabled and "[✓] " or "[  ] ") .. self.loc:t("xray_enabled_label"),
+                        callback = function()
+                            self.xray_mode_enabled = true
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    },
+                    {
+                        text = (not self.xray_mode_enabled and "[✓] " or "[  ] ") .. self.loc:t("xray_disabled_label"),
+                        callback = function()
+                            self.xray_mode_enabled = false
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = self.loc:t("menu_about") or "About",
+                        callback = function()
+                            UIManager:show(InfoMessage:new{
+                                text = self.loc:t("xray_mode_desc"),
+                                timeout = 30
+                            })
+                        end
+                    },
+                    {
+                        text = self.loc:t("close") or "Close",
+                        callback = function()
+                            UIManager:close(info_dialog)
+                        end
+                    }
+                }
+            }
+        }
+        UIManager:show(info_dialog)
+    end
+    
+    showSettings()
 end
 
 function XRayPlugin:showTimeline()

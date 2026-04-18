@@ -193,6 +193,8 @@ function Localization:t(key, ...)
             fetching_author = "Fetching author info from %s...",
             no_api_key = "No API key set!",
             no_author_data_fetch = "No author info available. Fetch from AI?",
+            xray_mode_desc = "Adds an 'X-Ray' button to dictionary and selection menus for instant lookups.",
+            no_data_prompt = "No X-Ray data found for this book. Would you like to fetch it from AI now?",
         }
         translation = fallbacks[key] or key
     end
