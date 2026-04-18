@@ -60,16 +60,18 @@ Reading Progress: %d%%
 
 TASK: Create a chronological timeline of key narrative events up to the %d%% mark.
 
-RULES:
-1. COVERAGE: Provide 1 key highlight for EVERY narrative chapter up to the %d%% mark.
-2. EXCLUSION: IGNORE Frontmatter, Table of Contents, "Also by", or Appendices.
-3. BREVITY: Each event description MUST be MAX 120 characters.
-4. NO SPOILERS: Stop exactly at the %d%% mark.
+STRICT RULES:
+1. COVERAGE: Provide EXACTLY ONE key highlight for EVERY narrative chapter up to the %d%% mark.
+2. NO GROUPING: DO NOT combine multiple chapters into one event.
+3. NO DUPLICATES: DO NOT provide more than one event for the same chapter.
+4. EXCLUSION: IGNORE Frontmatter, Table of Contents, "Also by", or Appendices.
+5. BREVITY: Each event description MUST be MAX 120 characters.
+6. NO SPOILERS: Stop exactly at the %d%% mark.
 
 REQUIRED JSON FORMAT:
 {
   "timeline": [
-    {"event": "Key narrative event (MAX 120 chars)", "chapter": "Chapter Name/Number", "importance": "High/Low"}
+    {"event": "Key narrative event (MAX 120 chars)", "chapter": "Chapter Name/Number"}
   ]
 }]],
 
@@ -91,19 +93,25 @@ Reading Progress: %d%%
 
 TASK: Provide a comprehensive X-Ray analysis of the book up to the %d%% mark.
 
-1. CHARACTERS & FIGURES:
-- List 15-25 most important characters. Use full formal names.
-- List 3-7 real-world historical figures mentioned.
-- Provide a deep analysis for each (250-300 chars), covering their history/role up to %d%%.
+1. TIMELINE (HIGHEST PRIORITY):
+- You will be provided with a numbered "LIST OF CHAPTERS" below, this is your primary key for unique listings.
+- MANDATORY: Your timeline array MUST have EXACTLY ONE entry for each and every numbered chapter provided.
+- DO NOT provide multiple events for one chapter.
+- DO NOT combine chapters. 
+- DO NOT skip chapters. 
+- Use context from "CHAPTER SAMPLES" to summarize each chapter.
+- Each event description MUST be MAX 200 characters.
+- Your timeline array MUST be in the EXACT chronological order of the provided chapter list.
+4. EXCLUSION: IGNORE Frontmatter, Table of Contents, "Also by", or Appendices.
 
-2. LOCATIONS:
+2. CHARACTERS & FIGURES:
+- List 15-25 most important characters. Use full formal names. Sort by importance/frequency in the book, with most important first.
+- List 3-7 real-world historical figures mentioned.
+- Provide a deep analysis for each (250-300 chars), covering their history/role in this book up to %d%%.
+
+3. LOCATIONS:
 - List 5-10 significant locations (cities, buildings, landmarks).
 - Concise descriptions (MAX 150 chars).
-
-3. TIMELINE:
-- Provide EXACTLY 1 key narrative highlight for EVERY narrative chapter up to the %d%% mark.
-- Each event description MUST be MAX 120 characters.
-- Ensure the timeline is strictly chronological.
 
 STRICT RULES:
 - NO SPOILERS: Stop all analysis and information exactly at the %d%% mark.
@@ -111,6 +119,9 @@ STRICT RULES:
 
 REQUIRED JSON FORMAT:
 {
+  "timeline": [
+    {"event": "Key narrative events from this chapter (MAX 200 chars)", "chapter": "Exact Chapter Title from List"}
+  ],
   "characters": [
     {
       "name": "Full Name",
@@ -131,9 +142,6 @@ REQUIRED JSON FORMAT:
   ],
   "locations": [
     {"name": "Place", "description": "Short desc (MAX 150 chars)", "importance": "Significance at %d%%"}
-  ],
-  "timeline": [
-    {"event": "Event (MAX 120 chars)", "chapter": "Chapter Name", "importance": "High/Low"}
   ]
 }]],
 

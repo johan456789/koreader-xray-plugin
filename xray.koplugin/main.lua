@@ -69,12 +69,6 @@ function XRayPlugin:onDispatcherRegisterActions()
         title = self.loc:t("menu_characters") or "Characters",
         general = true,
     })
-    Dispatcher:registerAction("xray_chapter_characters", {
-        category = "none",
-        event = "ShowXRayChapterCharacters",
-        title = self.loc:t("menu_chapter_characters") or "Chapter Characters",
-        general = true,
-    })
 end
 
 function XRayPlugin:onShowXRayQuickMenu()
@@ -152,11 +146,6 @@ function XRayPlugin:addToMainMenu(menu_items)
                 text = self.loc:t("menu_characters") .. (counts.characters > 0 and " (" .. counts.characters .. ")" or ""),
                 keep_menu_open = true,
                 callback = function() self:showCharacters() end,
-            },
-            {
-                text = self.loc:t("menu_chapter_characters"),
-                keep_menu_open = true,
-                callback = function() self:showChapterCharacters() end,
             },
             {
                 text = self.loc:t("menu_timeline") .. (counts.timeline > 0 and " (" .. counts.timeline .. " " .. self.loc:t("events") .. ")" or ""),
@@ -313,7 +302,7 @@ end
 
 function XRayPlugin:showCharacterDetails(character)
     local lines = { "NAME: " .. (character.name or "???"), "ROLE: " .. (character.role or "---"), "GENDER: " .. (character.gender or "---"), "OCCUPATION: " .. (character.occupation or "---"), "", "DESCRIPTION:", character.description or "---" }
-    UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n"), width = Screen:getWidth() * 0.9 })
+    UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n") })
 end
 
 function XRayPlugin:fetchFromAI()
@@ -335,42 +324,35 @@ function XRayPlugin:askSpoilerPreference()
     UIManager:show(spoiler_menu)
 end
 
+local function sanitizeMetadata(val)
+    if type(val) == "string" then return val
+    elseif type(val) == "table" then return table.concat(val, ", ")
+    else return "Unknown" end
+end
+
 function XRayPlugin:continueWithFetch(reading_percent)
     if not self.ai_helper then
         local AIHelper = require("aihelper")
         self.ai_helper = AIHelper
         self.ai_helper:init(self.path)
     end
-    local ButtonDialog = require("ui/widget/buttondialog")
     local props = self.ui.document:getProps() or {}
-    local title, author = props.title or "Unknown", props.authors or "Unknown"
+    local title = sanitizeMetadata(props.title)
+    local author = sanitizeMetadata(props.authors)
     local wait_msg
     local is_cancelled = false
-    wait_msg = ButtonDialog:new{ title = self.loc:t("fetching_ai", self.ai_provider or "AI"), text = title .. "\n\n" .. self.loc:t("fetching_wait") .. "\n\n" .. (self.loc:t("dont_touch") or "Do not touch the screen."), buttons = {{{ text = self.loc:t("cancel"), id = "close", callback = function() is_cancelled = true; UIManager:close(wait_msg) end }}}, close_on_touch_outside = false }
+    wait_msg = InfoMessage:new{ text = self.loc:t("fetching_ai", self.ai_provider or "AI") .. "\n\n" .. title .. "\n\n" .. self.loc:t("fetching_wait"), timeout = 120 }
     UIManager:show(wait_msg)
     UIManager:scheduleIn(0.5, function()
         if is_cancelled then return end
         if not self.chapter_analyzer then self.chapter_analyzer = require("chapteranalyzer"):new() end
+
+        -- 1. Extraction (Main Thread)
+        local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 20000, nil, self.ui:getCurrentPage())
+        local samples, chapter_titles = self.chapter_analyzer:getDetailedChapterSamples(self.ui, 200, 150000)
+        local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui)
         
-        -- Non-blocking extraction
-        local function performExtraction()
-            local text = self.chapter_analyzer:getTextForAnalysis(self.ui, 20000, nil, self.ui:getCurrentPage())
-            local samples = self.chapter_analyzer:getDetailedChapterSamples(self.ui, 200, 150000)
-            local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui)
-            return { book_text = text, chapter_samples = samples, annotations = annots }
-        end
-        
-        local completed, result = Trapper:dismissableRunInSubprocess(performExtraction, wait_msg)
-        
-        if not completed or is_cancelled then
-            if wait_msg then UIManager:close(wait_msg) end
-            return
-        end
-        
-        local book_text = result.book_text
-        local chapter_samples = result.chapter_samples
-        
-        if (not book_text or #book_text < 10) and not chapter_samples then
+        if (not book_text or #book_text < 10) and not samples then
             if wait_msg then UIManager:close(wait_msg) end
             UIManager:show(InfoMessage:new{ text = "Error: Could not extract book text.", timeout = 5 })
             return
@@ -381,48 +363,50 @@ function XRayPlugin:continueWithFetch(reading_percent)
             spoiler_free = reading_percent < 100, 
             filename = self.ui.document.file:match("([^/\\]+)$"), 
             series = props.series or props.Series, 
-            chapter_samples = chapter_samples, 
-            annotations = result.annotations, 
+            chapter_samples = samples, 
+            chapter_titles = chapter_titles,
+            annotations = annots, 
             book_text = book_text 
         }
         
+        -- 2. AI Request (Background Subprocess via aihelper:makeRequest)
         self.ai_helper:setTrapWidget(wait_msg)
         local final_book_data, error_code, error_msg = self.ai_helper:getBookDataComprehensive(title, author, self.ai_provider, context)
         self.ai_helper:resetTrapWidget()
+
         if wait_msg then UIManager:close(wait_msg) end
-        
-        if is_cancelled then return end
-        
+        if is_cancelled or error_code == "USER_CANCELLED" then return end
+
         if not final_book_data then
-            if error_code ~= "USER_CANCELLED" then
-                local error_dialog
-                error_dialog = ButtonDialog:new{ title = "Fetch Failed", text = error_msg or "Failed to fetch data.", buttons = {{{ text = self.loc:t("ok"), callback = function() UIManager:close(error_dialog) end }}} }
-                UIManager:show(error_dialog)
-            end
+            local error_dialog
+            local ButtonDialog = require("ui/widget/buttondialog")
+            error_dialog = ButtonDialog:new{ title = "Fetch Failed", text = error_msg or "Failed to fetch data.", buttons = {{{ text = self.loc:t("ok"), callback = function() UIManager:close(error_dialog) end }}} }
+            UIManager:show(error_dialog)
             return
         end
-        
+
         final_book_data.book_title = title
         final_book_data.author = author
-        
+
         -- Frequency Sorting
         final_book_data.characters = self:sortDataByFrequency(final_book_data.characters, book_text, "name")
         final_book_data.historical_figures = self:sortDataByFrequency(final_book_data.historical_figures, book_text, "name")
         final_book_data.locations = self:sortDataByFrequency(final_book_data.locations, book_text, "name")
-        
+
         self.characters = final_book_data.characters
         self.historical_figures = final_book_data.historical_figures
         self.locations = final_book_data.locations
         self.timeline = final_book_data.timeline
-        
+
         if not self.cache_manager then self.cache_manager = require("cachemanager"):new() end
         local cache_saved = self.cache_manager:saveCache(self.ui.document.file, final_book_data)
-        
+
         local summary = string.format("AI Fetch Complete!\n\nCharacters: %d\nLocations: %d\nEvents: %d\n\n%s", 
             #self.characters, #self.locations, #self.timeline,
             cache_saved and "✓ Cache updated." or "✗ Cache failed.")
-            
+
         local success_dialog
+        local ButtonDialog = require("ui/widget/buttondialog")
         success_dialog = ButtonDialog:new{ title = self.loc:t("fetch_successful") or "Fetch successful", text = summary, buttons = {{{ text = self.loc:t("ok"), callback = function() UIManager:close(success_dialog) end }}} }
         UIManager:show(success_dialog)
     end)
@@ -434,34 +418,42 @@ function XRayPlugin:fetchAuthorInfo()
         self.ai_helper = AIHelper
         self.ai_helper:init(self.path)
     end
-    local ButtonDialog = require("ui/widget/buttondialog")
     local props = self.ui.document:getProps() or {}
-    local title, author = props.title or "Unknown", props.authors or "Unknown"
-    local wait_msg = ButtonDialog:new{ title = self.loc:t("fetching_author", self.ai_provider or "AI"), text = title .. " - " .. author .. "\n\n" .. self.loc:t("fetching_wait"), buttons = {{{ text = self.loc:t("cancel"), callback = function() UIManager:close(wait_msg) end }}} }
+    local title = sanitizeMetadata(props.title)
+    local author = sanitizeMetadata(props.authors)
+    local wait_msg
+    local is_cancelled = false
+    wait_msg = InfoMessage:new{ text = self.loc:t("fetching_author", self.ai_provider or "AI") .. "\n\n" .. title .. " - " .. author .. "\n\n" .. self.loc:t("fetching_wait"), timeout = 120 }
     UIManager:show(wait_msg)
     UIManager:scheduleIn(0.5, function()
+        if is_cancelled then return end
+        
+        self.ai_helper:setTrapWidget(wait_msg)
         local author_data, error_code, error_msg = self.ai_helper:getAuthorData(title, author, self.ai_provider)
-        UIManager:close(wait_msg)
+        self.ai_helper:resetTrapWidget()
+        
+        if wait_msg then UIManager:close(wait_msg) end
+        if is_cancelled or error_code == "USER_CANCELLED" then return end
+
         if not author_data then
             local error_dialog
+            local ButtonDialog = require("ui/widget/buttondialog")
             error_dialog = ButtonDialog:new{ title = "Error: Author Fetch", text = (error_msg or "Failed to fetch author info.") .. "\n\n(See crash.log in root for details)", buttons = {{{ text = self.loc:t("ok"), callback = function() UIManager:close(error_dialog) end }}} }
             UIManager:show(error_dialog)
             return
         end
-        self.author_info = { name = author_data.author or author, description = author_data.author_bio or "No biography available.", birthDate = author_data.author_birth or "---", deathDate = author_data.author_death or "---" }
+        self.author_info = { 
+            name = sanitizeMetadata(author_data.author or author), 
+            description = sanitizeMetadata(author_data.author_bio or "No biography available."), 
+            birthDate = sanitizeMetadata(author_data.author_birth or "---"), 
+            deathDate = sanitizeMetadata(author_data.author_death or "---") 
+        }
         if not self.cache_manager then self.cache_manager = require("cachemanager"):new() end
         local cache = self.cache_manager:loadCache(self.ui.document.file) or {}
         cache.author = self.author_info.name; cache.author_bio = self.author_info.description; cache.author_birth = self.author_info.birthDate; cache.author_death = self.author_info.deathDate
         self.cache_manager:saveCache(self.ui.document.file, cache)
         self:showAuthorInfo()
     end)
-end
-
-function XRayPlugin:showLocations()
-    if not self.locations or #self.locations == 0 then UIManager:show(InfoMessage:new{ text = self.loc:t("no_location_data"), timeout = 3 }); return end
-    local items = {}
-    for _, loc in ipairs(self.locations) do table.insert(items, { text = (loc.name or "???"), callback = function() UIManager:show(InfoMessage:new{ text = (loc.name or "") .. "\n\n" .. (loc.description or "") .. "\n\nImportance: " .. (loc.importance or ""), timeout = 10 }) end }) end
-    UIManager:show(Menu:new{ title = self.loc:t("menu_locations"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
 end
 
 function XRayPlugin:showAuthorInfo()
@@ -472,7 +464,7 @@ function XRayPlugin:showAuthorInfo()
         UIManager:show(ask_dialog); return
     end
     local lines = { "NAME: " .. (self.author_info.name or "Unknown"), "BORN: " .. (self.author_info.birthDate or "---"), "DIED: " .. (self.author_info.deathDate or "---"), "", "BIOGRAPHY:", (self.author_info.description or "No biography available.") }
-    UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n"), timeout = 15, width = Screen:getWidth() * 0.9 })
+    UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n"), timeout = 15 })
 end
 
 function XRayPlugin:showAbout()
@@ -495,7 +487,7 @@ end
 function XRayPlugin:showTimeline()
     if not self.timeline or #self.timeline == 0 then UIManager:show(InfoMessage:new{ text = self.loc:t("no_timeline_data"), timeout = 3 }); return end
     local items = {}
-    for _, ev in ipairs(self.timeline) do table.insert(items, { text = (ev.chapter or "") .. ": " .. (ev.event or ""), callback = function() UIManager:show(InfoMessage:new{ text = (ev.event or "") .. "\n\nImportance: " .. (ev.importance or ""), timeout = 10 }) end }) end
+    for _, ev in ipairs(self.timeline) do table.insert(items, { text = (ev.chapter or "") .. ": " .. (ev.event or ""), callback = function() UIManager:show(InfoMessage:new{ text = (ev.event or ""), timeout = 10 }) end }) end
     UIManager:show(Menu:new{ title = self.loc:t("menu_timeline"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
 end
 
@@ -504,18 +496,6 @@ function XRayPlugin:showHistoricalFigures()
     local items = {}
     for _, fig in ipairs(self.historical_figures) do table.insert(items, { text = (fig.name or "???"), callback = function() UIManager:show(InfoMessage:new{ text = (fig.name or "") .. "\n\n" .. (fig.biography or ""), timeout = 15 }) end }) end
     UIManager:show(Menu:new{ title = self.loc:t("menu_historical_figures"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
-end
-
-function XRayPlugin:showChapterCharacters()
-    if not self.chapter_analyzer then self.chapter_analyzer = require("chapteranalyzer"):new() end
-    local text, title = self.chapter_analyzer:getCurrentChapterText(self.ui)
-    if text then
-        local found = self.chapter_analyzer:findCharactersInText(text, self.characters)
-        if #found == 0 then UIManager:show(InfoMessage:new{ text = self.loc:t("no_characters_in_chapter") or "No characters found in this chapter.", timeout = 3 }); return end
-        local items = {}
-        for _, entry in ipairs(found) do table.insert(items, { text = string.format("%s (%d %s)\n   %s", entry.character.name or "Unknown", entry.count, self.loc:t("mentions") or "mentions", entry.character.role or ""), callback = function() self:showCharacterDetails(entry.character) end }) end
-        UIManager:show(Menu:new{ title = (title or self.loc:t("menu_chapter_characters")) .. " (" .. #found .. ")", item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
-    else UIManager:show(InfoMessage:new{ text = self.loc:t("chapter_text_error"), timeout = 3 }) end
 end
 
 function XRayPlugin:showQuickXRayMenu() self:showFullXRayMenu() end

@@ -452,12 +452,12 @@ end
 
 -- Get detailed samples (Start/Mid/End) from each chapter up to current position
 function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit)
-    if not ui or not ui.document then return nil end
+    if not ui or not ui.document then return nil, nil end
     
     local toc = ui.document:getToc()
     if not toc or #toc == 0 then 
         logger.info("ChapterAnalyzer: No TOC found for detailed sampling")
-        return nil 
+        return nil, nil 
     end
     
     local current_page = nil
@@ -469,21 +469,23 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
         current_page = ui.paging:getCurrentPage()
     end
     
-    if not current_page then return nil end
+    if not current_page then return nil, nil end
     
     max_chapters = max_chapters or 200
     total_limit = total_limit or 150000
     
     -- Filter chapters to only those we have reached
     local active_chapters = {}
+    local chapter_titles = {}
     for i, chapter in ipairs(toc) do
         if (chapter.page and chapter.page > current_page) or i > max_chapters then
             break
         end
         table.insert(active_chapters, chapter)
+        table.insert(chapter_titles, chapter.title or tostring(i))
     end
     
-    if #active_chapters == 0 then return nil end
+    if #active_chapters == 0 then return nil, nil end
     
     -- Calculate budget per chapter
     -- Reserve 20k for the main book_text (last 20k)
@@ -525,7 +527,7 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
         end
     end
     
-    return #samples > 0 and table.concat(samples, "\n\n---\n\n") or nil
+    return (#samples > 0 and table.concat(samples, "\n\n---\n\n") or nil), chapter_titles
 end
 
 function ChapterAnalyzer:countMentions(text, name)

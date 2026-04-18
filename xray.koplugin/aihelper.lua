@@ -69,12 +69,16 @@ function AIHelper:makeRequest(url, headers, request_body, timeout, maxtime)
         if ok == nil and (code == "timeout" or tostring(code):find("timeout")) then return nil, "error_timeout", "Connection timed out" end
         return ok, code, response_text, status
     end
+    
     if self.trap_widget then
         local completed, ok, code, response_text, status = Trapper:dismissableRunInSubprocess(performRequest, self.trap_widget)
         if not completed then return nil, "USER_CANCELLED", "Request cancelled" end
+        -- Note: Subprocess results can sometimes be nil if not handled perfectly, fallback to sync if needed
         if ok == nil and code == nil then return performRequest() end
         return ok, code, response_text, status
-    else return performRequest() end
+    else
+        return performRequest()
+    end
 end
 
 function AIHelper:init(path)
@@ -150,6 +154,13 @@ function AIHelper:createPrompt(title, author, context, section_name)
     if context then
         if context.series then enhanced_title = enhanced_title .. " | Series: " .. context.series end
         if context.book_text then extra_context = extra_context .. "\n\nBOOK TEXT CONTEXT:\n" .. context.book_text end
+        if context.chapter_titles and #context.chapter_titles > 0 then
+            local numbered_chapters = {}
+            for i, t in ipairs(context.chapter_titles) do
+                table.insert(numbered_chapters, string.format("%d. %s", i, t))
+            end
+            extra_context = extra_context .. "\n\nLIST OF CHAPTERS (Provide EXACTLY 1 event for EACH, in order):\n" .. table.concat(numbered_chapters, "\n")
+        end
         if context.chapter_samples then extra_context = extra_context .. "\n\nCHAPTER SAMPLES:\n" .. context.chapter_samples end
         if context.annotations then extra_context = extra_context .. "\n\nUSER HIGHLIGHTS:\n" .. context.annotations end
     end
@@ -248,6 +259,26 @@ local function normalizeKeys(t)
     return res
 end
 
+local function fixTruncatedJSON(s)
+    local stack, in_string, escaped = {}, false, false
+    for i = 1, #s do
+        local c = s:sub(i,i)
+        if escaped then escaped = false
+        elseif c == "\\" then escaped = true
+        elseif c == '"' then in_string = not in_string
+        elseif not in_string then
+            if c == "{" or c == "[" then table.insert(stack, c)
+            elseif c == "}" then if #stack > 0 and stack[#stack] == "{" then table.remove(stack) end
+            elseif c == "]" then if #stack > 0 and stack[#stack] == "[" then table.remove(stack) end end
+        end
+    end
+    local res = s
+    if in_string then res = res .. '"' end
+    res = res:gsub(",%s*$", "")
+    for i = #stack, 1, -1 do if stack[i] == "{" then res = res .. "}" else res = res .. "]" end end
+    return res
+end
+
 function AIHelper:parseAIResponse(text)
     if not text or #text == 0 then return nil, "Empty response" end
     local json_text = text:gsub("```%w*", ""):gsub("```", ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -271,26 +302,6 @@ function AIHelper:parseAIResponse(text)
     if success and data then return self:validateAndCleanData(normalizeKeys(data)) end
     self:log("AIHelper: Parse failed. Snippet: " .. tostring(text):sub(1, 100))
     return nil, "Failed to parse JSON. Check xray.log."
-end
-
-function fixTruncatedJSON(s)
-    local stack, in_string, escaped = {}, false, false
-    for i = 1, #s do
-        local c = s:sub(i,i)
-        if escaped then escaped = false
-        elseif c == "\\" then escaped = true
-        elseif c == '"' then in_string = not in_string
-        elseif not in_string then
-            if c == "{" or c == "[" then table.insert(stack, c)
-            elseif c == "}" then if #stack > 0 and stack[#stack] == "{" then table.remove(stack) end
-            elseif c == "]" then if #stack > 0 and stack[#stack] == "[" then table.remove(stack) end end
-        end
-    end
-    local res = s
-    if in_string then res = res .. '"' end
-    res = res:gsub(",%s*$", "")
-    for i = #stack, 1, -1 do if stack[i] == "{" then res = res .. "}" else res = res .. "]" end end
-    return res
 end
 
 function AIHelper:validateAndCleanData(data)
@@ -342,6 +353,17 @@ function AIHelper:validateAndCleanData(data)
     data.locations = valid_locs
     
     data.timeline = data.timeline or data.Timeline or {}
+    
+    -- Sanitize author info if present
+    if data.author or data.author_bio or data.author_birth or data.author_death then
+        local strings = self:getFallbackStrings()
+        local function ensureString(v, d) return (type(v) == "string" and #v > 0) and v or d or "" end
+        data.author = ensureString(data.author, strings.unknown_author)
+        data.author_bio = ensureString(data.author_bio, strings.no_biography)
+        data.author_birth = ensureString(data.author_birth, "---")
+        data.author_death = ensureString(data.author_death, "---")
+    end
+    
     return data
 end
 

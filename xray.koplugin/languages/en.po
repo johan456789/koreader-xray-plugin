@@ -132,28 +132,19 @@ msgstr "events"
 # ==============================
 
 msgid "no_character_data"
-msgstr "No character data yet. Please use 'Fetch AI Data' first."
-
-msgid "no_char_data_fetch"
-msgstr "No character info yet.\n\nPlease fetch data from AI first."
+msgstr "No character data yet.\n\nPlease use 'Fetch X-Ray Data' first."
 
 msgid "no_location_data"
-msgstr "No location data yet. Please use 'Fetch AI Data' first."
+msgstr "No location data yet. Please use 'Fetch X-Ray Data' first."
 
 msgid "no_author_data"
 msgstr "No author info yet. Please use 'Fetch AI Data' first."
 
-msgid "no_summary_data"
-msgstr "No summary data yet. Please use 'Fetch AI Data' first."
-
-msgid "no_theme_data"
-msgstr "No theme data yet. Please use 'Fetch AI Data' first."
-
 msgid "no_timeline_data"
-msgstr "No timeline data yet.\n\nPlease use 'Fetch AI Data' first.\n\nAI will show key events in\nchronological order."
+msgstr "No timeline data yet.\n\nPlease use 'Fetch X-Ray Data' first.\n\nAI will show key events in\nchronological order."
 
 msgid "no_historical_data"
-msgstr "No historical figure data yet.\n\nPlease use 'Fetch AI Data' first.\n\nAI will detect real historical\nfigures mentioned in the book."
+msgstr "No historical figure data yet.\n\nPlease use 'Fetch X-Ray Data' first.\n\nAI will detect real historical\nfigures mentioned in the book."
 
 # ==============================
 # AUTO-LOAD & CACHE
