@@ -26,17 +26,24 @@ Estás procesando un documento masivo con dos bloques de texto proporcionados al
 1. "CHAPTER SAMPLES" (Muestras de capítulos): Este es el macrocontexto del libro hasta la ubicación actual del lector.
 2. "BOOK TEXT CONTEXT" (Contexto del texto del libro): Este es el microcontexto de los últimos 20,000 caracteres.
 
+PROTOCOLO ANTI-TRUNCAMIENTO (CRÍTICO):
+Tienes un límite máximo de salida estricto. Si las "CHAPTER SAMPLES" contienen MÁS DE 40 capítulos (ej. una edición ómnibus):
+1. DEBES reducir la lista de personajes a ÚNICAMENTE los 10 personajes más importantes.
+2. DEBES reducir las descripciones de los personajes a un MÁXIMO de 120 caracteres.
+3. DEBES reducir los resúmenes de eventos de la línea de tiempo a un MÁXIMO de 80 caracteres.
+Si no comprimes tu salida para libros masivos, el JSON se truncará y fallará.
+
 ALGORITMO PARA LA LÍNEA DE TIEMPO (MÁXIMA PRIORIDAD):
 Sufres de sesgo de recencia. Para evitar saltar capítulos o combinarlos, DEBES ejecutar este bucle exacto:
 Paso 1. Mira ÚNICAMENTE el bloque "CHAPTER SAMPLES". Cuenta los capítulos narrativos.
 Paso 2. Comienza en el primer capítulo de las muestras. Crea EXACTAMENTE UN objeto de evento en la matriz `timeline`.
 Paso 3. El campo `chapter` DEBE coincidir exactamente con el encabezado del capítulo en la muestra. (NOTA: Si esto es un ómnibus que contiene varios libros, los títulos de los capítulos pueden repetirse o reiniciarse. Mapéalos estrictamente en el orden secuencial proporcionado).
-Paso 4. Resume ese capítulo específico en el campo `event` (Máximo 200 caracteres).
+Paso 4. Resume ese capítulo específico en el campo `event` (Sigue las longitudes del Protocolo Anti-Truncamiento).
 Paso 5. Pasa al SIGUIENTE capítulo en las muestras y repite el Paso 2.
 Paso 6. NO te detengas hasta que CADA capítulo de las muestras tenga EXACTAMENTE UN evento correspondiente. No los agrupes. SIN SPOILERS: Detente exactamente en la marca del %d%%.
 
 ALGORITMO PARA PERSONAJES Y FIGURAS HISTÓRICAS:
-Paso 1. Extrae de 15 a 25 personajes importantes usando ambos bloques de texto.
+Paso 1. Extrae personajes importantes usando ambos bloques de texto. (15-25 normal, MÁXIMO 10 si es ómnibus).
 Paso 2. DEBES usar sus nombres completos y formales (ej. "Abraham Van Helsing"). NO uses apodos informales como nombre principal.
 Paso 3. Escanea activamente personas REALES de la historia humana (ej. Presidentes, Autores, Generales). Añádelos a `historical_figures`.
 SIN SPOILERS: Detente exactamente en la marca del %d%%.
@@ -61,7 +68,7 @@ FORMATO JSON REQUERIDO:
       "role": "Papel hasta el progreso actual",
       "gender": "Masculino / Femenino / Desconocido",
       "occupation": "Trabajo/Estado",
-      "description": "Análisis profundo (250-300 caracteres). SIN SPOILERS."
+      "description": "Análisis profundo. SIN SPOILERS."
     }
   ],
   "historical_figures": [
@@ -79,7 +86,7 @@ FORMATO JSON REQUERIDO:
   "timeline": [
     {
       "chapter": "Título exacto del capítulo de las muestras",
-      "event": "Evento narrativo clave de este capítulo (MÁX 150 caracteres)"
+      "event": "Evento narrativo clave de este capítulo"
     }
   ]
 }]],

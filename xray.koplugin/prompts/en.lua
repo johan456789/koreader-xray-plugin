@@ -26,17 +26,24 @@ You are processing a massive document with two text blocks provided at the end o
 1. "CHAPTER SAMPLES": This is the macro-context of the book up to the reader's current location.
 2. "BOOK TEXT CONTEXT": This is the micro-context of the most recent 20k characters.
 
+ANTI-TRUNCATION PROTOCOL (CRITICAL):
+You have a strict maximum output limit. If the "CHAPTER SAMPLES" contains MORE THAN 40 chapters (e.g., an omnibus edition):
+1. You MUST reduce the characters list to ONLY the top 10 absolute most important characters.
+2. You MUST reduce character descriptions to MAX 120 characters.
+3. You MUST reduce timeline event summaries to MAX 80 characters.
+Failure to compress your output for massive books will cause the JSON to truncate and fail.
+
 ALGORITHM FOR TIMELINE (HIGHEST PRIORITY):
 You suffer from recency bias. To prevent skipping chapters or combining them, you MUST execute this exact loop:
 Step 1. Look ONLY at the "CHAPTER SAMPLES" block. Count the narrative chapters.
 Step 2. Start at the very first chapter in the samples. Create EXACTLY ONE event object in the `timeline` array.
 Step 3. The `chapter` field MUST exactly match the chapter header in the sample. (NOTE: If this is an omnibus containing multiple books, chapter titles might repeat or reset. Map them strictly in the sequential order provided).
-Step 4. Summarize that specific chapter in the `event` field (Max 200 chars).
+Step 4. Summarize that specific chapter in the `event` field (Follow Anti-Truncation lengths).
 Step 5. Move to the NEXT chapter in the samples and repeat Step 2.
 Step 6. Do NOT stop until EVERY single chapter in the samples has EXACTLY ONE corresponding event. Do not group them. NO SPOILERS: Stop exactly at the %d%% mark.
 
 ALGORITHM FOR CHARACTERS & HISTORICAL FIGURES:
-Step 1. Extract 15-25 important characters using both text blocks.
+Step 1. Extract important characters using both text blocks. (15-25 normal, MAX 10 if omnibus).
 Step 2. You MUST use their FULL, formal names (e.g., "Abraham Van Helsing"). Do NOT use casual nicknames as the main name.
 Step 3. Actively scan for REAL people from human history (e.g., Presidents, Authors, Generals). Add them to `historical_figures`.
 NO SPOILERS: Stop exactly at the %d%% mark.
@@ -61,7 +68,7 @@ REQUIRED JSON FORMAT:
       "role": "Role up to current progress",
       "gender": "Male / Female / Unknown",
       "occupation": "Job/Status",
-      "description": "Deep analysis (250-300 chars). NO SPOILERS."
+      "description": "Deep analysis. NO SPOILERS."
     }
   ],
   "historical_figures": [
@@ -79,7 +86,7 @@ REQUIRED JSON FORMAT:
   "timeline": [
     {
       "chapter": "Exact Chapter Title from Samples",
-      "event": "Key narrative event from this chapter (MAX 150 chars)"
+      "event": "Key narrative event from this chapter"
     }
   ]
 }]],

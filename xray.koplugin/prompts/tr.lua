@@ -26,17 +26,24 @@ Bu istemin sonunda sağlanan iki metin bloğunu işliyorsunuz:
 1. "CHAPTER SAMPLES" (Bölüm Örnekleri): Okuyucunun mevcut konumuna kadar olan kitabın makro bağlamıdır.
 2. "BOOK TEXT CONTEXT" (Kitap Metni Bağlamı): En son 20.000 karakterlik mikro bağlamdır.
 
+ANTI-TRUNCATION PROTOKOLÜ (KRİTİK):
+Katı bir maksimum çıktı sınırınız var. Eğer "CHAPTER SAMPLES" 40'tan FAZLA bölüm içeriyorsa (örn. bir omnibus baskısı):
+1. Karakter listesini SADECE en önemli ilk 10 karakterle sınırlamalısınız.
+2. Karakter açıklamalarını MAKSİMUM 120 karakterle sınırlamalısınız.
+3. Zaman çizelgesi olay özetlerini MAKSİMUM 80 karakterle sınırlamalısınız.
+Çıktınızı devasa kitaplar için sıkıştırmazsanız, JSON kesilecek ve hata verecektir.
+
 ZAMAN ÇİZELGESİ İÇİN ALGORİTMA (EN YÜKSEK ÖNCELİK):
 Sizde 'yakınlık önyargısı' (recency bias) var. Bölüm atlamayı veya bölümleri birleştirmeyi önlemek için, bu döngüyü tam olarak uygulamalısınız:
 Adım 1. SADECE "CHAPTER SAMPLES" bloğuna bak. Anlatı bölümlerini say.
 Adım 2. Örneklerdeki ilk bölümden başla. `timeline` dizisinde TAM OLARAK BİR olay objesi oluştur.
 Adım 3. `chapter` alanı, örnekteki bölüm başlığıyla tam olarak eşleşmelidir. (NOT: Bu birden fazla kitabı içeren bir omnibus ise, bölüm başlıkları tekrarlanabilir veya sıfırlanabilir. Bunları kesinlikle sağlanan sıralı düzende eşleyin).
-Adım 4. Bu özel bölümü `event` alanında özetle (Maks 200 karakter).
+Adım 4. Bu özel bölümü `event` alanında özetle (Anti-Truncation uzunluklarına uyun).
 Adım 5. Örneklerdeki BİR SONRAKİ bölüme geç ve Adım 2'yi tekrarla.
 Adım 6. Örneklerdeki HER BİR bölüm için TAM OLARAK BİR karşılık gelen olay oluşana kadar durma. Bölümleri gruplandırma. SPOILER YOK: Tam olarak %%%d noktasında dur.
 
 KARAKTERLER VE TARİHİ KİŞİLER İÇİN ALGORİTMA:
-Adım 1. Her iki metin bloğunu da kullanarak 15-25 önemli karakter çıkar.
+Adım 1. Her iki metin bloğunu da kullanarak önemli karakterleri çıkar. (Normalde 15-25, omnibus ise MAKSİMUM 10).
 Adım 2. Karakterlerin TAM resmi isimlerini kullanmalısın (örn. "Abraham Van Helsing"). Gündelik takma adları ana isim olarak kullanma.
 Adım 3. İnsanlık tarihindeki GERÇEK kişileri (örn. Başkanlar, Yazarlar, Generaller) aktif olarak tara. Onları `historical_figures` içine ekle.
 SPOILER YOK: Tam olarak %%%d noktasında dur.
@@ -61,7 +68,7 @@ GEREKLİ JSON FORMATI:
       "role": "Mevcut ilerlemeye kadar olan rolü",
       "gender": "Erkek / Kadın / Bilinmiyor",
       "occupation": "Meslek/Durum",
-      "description": "Derin analiz (250-300 karakter). SPOILER YOK."
+      "description": "Derin analiz. SPOILER YOK."
     }
   ],
   "historical_figures": [
@@ -79,7 +86,7 @@ GEREKLİ JSON FORMATI:
   "timeline": [
     {
       "chapter": "Örneklerdeki Tam Bölüm Başlığı",
-      "event": "Bu bölümdeki temel anlatı olayı (MAKS 150 karakter)"
+      "event": "Bu bölümdeki temel anlatı olayı"
     }
   ]
 }]],
