@@ -1,6 +1,6 @@
 -- ChapterAnalyzer - Analyze which characters appear in current chapter/page
 local logger = require("logger")
-local AIHelper = require("aihelper")
+local AIHelper = require("xray_aihelper")
 
 local ChapterAnalyzer = {}
 

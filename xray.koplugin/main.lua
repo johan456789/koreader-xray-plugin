@@ -20,6 +20,18 @@ function XRayPlugin:init()
         self.ui.menu:registerToMainMenu(self)
     end
 
+    -- Clean up legacy un-prefixed module files from older versions to prevent namespace collisions
+    local legacy_files = { "aihelper.lua", "cachemanager.lua", "chapteranalyzer.lua", "lookupmanager.lua", "updater.lua" }
+    for _, file in ipairs(legacy_files) do
+        local old_path = self.path .. "/" .. file
+        local f = io.open(old_path, "r")
+        if f then
+            f:close()
+            os.remove(old_path)
+            self:log("XRayPlugin: Cleaned up legacy file " .. file)
+        end
+    end
+
     local Localization = require("localization_xray")
     self.loc = Localization
     self.loc:init(self.path)

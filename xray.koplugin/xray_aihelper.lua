@@ -105,8 +105,23 @@ function AIHelper:loadConfig()
             if old_config.chatgpt_api_key and #old_config.chatgpt_api_key > 0 then has_keys = true end
             if has_keys then
                 self:log("AIHelper: Migrating user keys from old config.lua to xray_config.lua")
-                os.remove(new_config_file)
-                os.rename(old_config_file, new_config_file)
+                local new_f = io.open(new_config_file, "r")
+                if new_f then
+                    local new_text = new_f:read("*a")
+                    new_f:close()
+                    if old_config.gemini_api_key and #old_config.gemini_api_key > 0 then
+                        new_text = new_text:gsub('gemini_api_key%s*=%s*""', 'gemini_api_key = "' .. old_config.gemini_api_key .. '"')
+                    end
+                    if old_config.chatgpt_api_key and #old_config.chatgpt_api_key > 0 then
+                        new_text = new_text:gsub('chatgpt_api_key%s*=%s*""', 'chatgpt_api_key = "' .. old_config.chatgpt_api_key .. '"')
+                    end
+                    local out_f = io.open(new_config_file, "w")
+                    if out_f then
+                        out_f:write(new_text)
+                        out_f:close()
+                    end
+                end
+                os.remove(old_config_file)
             else
                 os.remove(old_config_file)
             end
