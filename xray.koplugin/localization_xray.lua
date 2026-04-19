@@ -311,7 +311,7 @@ function Localization:setLanguage(lang_code)
     
     self:loadTranslations()
     
-    local AIHelper = require("aihelper")
+    local AIHelper = require("xray_aihelper")
     if AIHelper then
         AIHelper:loadLanguage()
     end
@@ -325,7 +325,7 @@ function Localization:reload()
     self:loadTranslations()
     
     -- Clear cached translations in AIHelper if it exists
-    local AIHelper = require("aihelper")
+    local AIHelper = require("xray_aihelper")
     if AIHelper and AIHelper.localization then
         AIHelper.localization = nil
     end
