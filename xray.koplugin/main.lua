@@ -271,6 +271,15 @@ function XRayPlugin:getSubMenuItems()
             separator = true,
         },
         {
+            text = self.loc:t("updater_check") or "Check for Updates",
+            keep_menu_open = true,
+            callback = function()
+                local updater = require("updater")
+                updater.checkForUpdates(self.loc)
+            end,
+            separator = true,
+        },
+        {
             text = self.loc:t("menu_about"),
             keep_menu_open = true,
             callback = function() self:showAbout() end,
@@ -386,7 +395,6 @@ function XRayPlugin:showSpoilerSettings()
     
     local function showSettings()
         if info_dialog then UIManager:close(info_dialog) end
-        
         local current_setting = self.ai_helper.settings and self.ai_helper.settings.spoiler_setting or "spoiler_free"
         
         info_dialog = ButtonDialog:new{
@@ -398,8 +406,7 @@ function XRayPlugin:showSpoilerSettings()
                         text = (current_setting == "spoiler_free" and "[✓] " or "[  ] ") .. (self.loc:t("spoiler_free_menu_option") or "Spoiler-free"),
                         callback = function()
                             self.ai_helper:saveSettings({ spoiler_setting = "spoiler_free" })
-                            UIManager:show(InfoMessage:new{ text = (self.loc:t("spoiler_free_saved") or "Spoiler setting saved: Spoiler-free Mode"), timeout = 2 })
-                            self:refreshXRayMenuText()
+                            UIManager:setDirty(nil, "ui")
                             UIManager:nextTick(function() showSettings() end)
                         end
                     },
@@ -407,8 +414,7 @@ function XRayPlugin:showSpoilerSettings()
                         text = (current_setting == "full_book" and "[✓] " or "[  ] ") .. (self.loc:t("full_book_option") or "Full Book Mode"),
                         callback = function()
                             self.ai_helper:saveSettings({ spoiler_setting = "full_book" })
-                            UIManager:show(InfoMessage:new{ text = (self.loc:t("full_book_saved") or "Spoiler setting saved: Full Book Mode"), timeout = 2 })
-                            self:refreshXRayMenuText()
+                            UIManager:setDirty(nil, "ui")
                             UIManager:nextTick(function() showSettings() end)
                         end
                     }
@@ -631,25 +637,26 @@ function XRayPlugin:toggleXRayMode()
     
     local function showSettings()
         if info_dialog then UIManager:close(info_dialog) end
-        
         info_dialog = ButtonDialog:new{
             title = self.loc:t("menu_xray_mode") or "X-Ray Mode Settings",
             text = self.loc:t("xray_mode_desc"),
             buttons = {
                 {
                     {
-                        text = (self.xray_mode_enabled and "[✓] " or "[  ] ") .. self.loc:t("xray_enabled_label"),
+                        text = (self.xray_mode_enabled and "[✓] " or "[  ] ") .. (self.loc:t("xray_enabled_label") or "Enabled"),
                         callback = function()
                             self.xray_mode_enabled = true
                             if self.ai_helper then self.ai_helper:saveSettings({ xray_mode_enabled = true }) end
+                            UIManager:setDirty(nil, "ui")
                             UIManager:nextTick(function() showSettings() end)
                         end
                     },
                     {
-                        text = (not self.xray_mode_enabled and "[✓] " or "[  ] ") .. self.loc:t("xray_disabled_label"),
+                        text = (not self.xray_mode_enabled and "[✓] " or "[  ] ") .. (self.loc:t("xray_disabled_label") or "Disabled"),
                         callback = function()
                             self.xray_mode_enabled = false
                             if self.ai_helper then self.ai_helper:saveSettings({ xray_mode_enabled = false }) end
+                            UIManager:setDirty(nil, "ui")
                             UIManager:nextTick(function() showSettings() end)
                         end
                     }
