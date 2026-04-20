@@ -5,23 +5,24 @@
 ![Platform](https://img.shields.io/badge/platform-KOReader-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
 
-This plugin brings Amazon Kindle's X-Ray functionality to KOReader. It uses AI (Google Gemini or ChatGPT) to analyze the book you're reading and extract character details, locations, and historical context. 
+This plugin brings Kindle-style X-Ray features to KOReader. It uses AI to track characters, build plot timelines, and provide historical context while you read.
 
-The prompts are designed to be spoiler-free based on your current reading progress, and all the generated data is cached locally so you only need an internet connection the first time you analyze a book.
+## What it does
 
-## Features
+- **AI-Powered Insights**: Uses Google Gemini or OpenAI ChatGPT to scan your books.
+- **Character Tracking**: View bios and roles so you never forget who someone is.
+- **Plot Timeline**: Keeps track of major events chapter by chapter.
+- **Historical Context**: Pulls real-world info for historical figures and locations.
+- **Spoiler Protection**: "Spoiler-free" mode only reads up to your current page so future twists aren't ruined.
+- **Offline First**: You only need internet to fetch the data initially. After that, it's saved locally.
+- **Multilingual**: Available in English, Spanish, Portuguese, and Turkish.
 
-- **X-Ray Selection Mode:** Adds an "X-Ray" button to the dictionary and text selection menus. Highlight a name or location on the page to instantly see its description without leaving your book.
-- **Character Tracking:** Automatically extracts character names, roles, and descriptions. 
-- **Sequential Timelines:** Generates a strictly chronological timeline of key events (one per chapter), making it easy to catch up on the plot.
-- **Context & Lore:** Identifies real historical figures mentioned in the text (along with brief biographies) and lists important locations.
-- **Robust AI Fetching:** Automatically retries failed requests using secondary and lighter models (Flash -> Pro -> 8b) to ensure you always get your data.
-- **Kindle Optimized:** UI designed specifically for stability and performance on older e-ink hardware like the Kindle Paperwhite 1.
-- **Spoiler-Free:** The AI is instructed to avoid revealing major plot twists beyond your current reading progress.
-- **Local Caching:** Data is fetched once and saved locally per book. It works completely offline after the initial setup.
-- **Multilingual:** Supports interface and AI responses in English, Turkish, Portuguese, and Spanish.
-- **Updater:** Built-in updater for the plugin itself. Just click on "Check for Updates" in the menu to update the plugin.
+## Documentation
 
-## Setup
+For full setup instructions and a deep dive into features, check out the **[GitHub Wiki](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki)**.
 
-[Get Started](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/Get-Started)
+- **[Get Started](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/Get-Started)**: Installation and API key setup.
+- **[Core Features](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/Core-Features)**: Characters, Timeline, and Lookups.
+- **[AI Providers](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/AI-Providers-and-Models)**: Using Gemini vs ChatGPT.
+- **[Spoiler Protection](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/Spoiler-Protection)**: How we keep the story safe.
+- **[Advanced Usage](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/Advanced-Usage)**: Gestures, lookups, and manual config.
