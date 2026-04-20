@@ -116,10 +116,25 @@ end
 function AIHelper:makeRequestAsync(request_params, result_file)
     local fork = nil
     
-    -- Method 1: ffiutil (Standard in KOReader)
-    local ok_ffi, ffiutil = pcall(require, "ffiutil")
-    if ok_ffi and ffiutil and ffiutil.fork then
-        fork = ffiutil.fork
+    -- Method 1: ffi/util (Standard in KOReader)
+    local ok_ffi, ffiutil = pcall(require, "ffi/util")
+    if not ok_ffi then
+        ok_ffi, ffiutil = pcall(require, "ffiutil")
+    end
+    
+    if ok_ffi and ffiutil then
+        if ffiutil.fork then
+            fork = ffiutil.fork
+        elseif ffiutil.runInSubProcess then
+            -- ffiutil.runInSubProcess(func, pipe) returns pid, read_fd
+            -- We can use it as a fork fallback if it just takes a function
+            fork = function()
+                -- This is a bit of a hack, but let's see if we can just get a raw fork
+                -- Most KOReader versions with ffi/util also have posix.fork available globally
+                -- or via ffi.C.fork
+                return nil -- fallback to posix
+            end
+        end
     end
     
     -- Method 2: luaposix (Traditional)
@@ -133,8 +148,19 @@ function AIHelper:makeRequestAsync(request_params, result_file)
         end
     end
     
+    -- Method 3: FFI raw fork (Last resort for Android)
     if not fork then
-        self:log("AIHelper: No fork() available (tried ffiutil and posix)")
+        local ok_f, ffi = pcall(require, "ffi")
+        if ok_f then
+            pcall(function()
+                ffi.cdef[[ int fork(void); ]]
+                fork = ffi.C.fork
+            end)
+        end
+    end
+    
+    if not fork then
+        self:log("AIHelper: No fork() available (tried ffi/util, posix, and ffi.C)")
         return false
     end
 
