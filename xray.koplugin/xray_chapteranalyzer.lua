@@ -354,23 +354,37 @@ function ChapterAnalyzer:getTextForAnalysis(ui, max_len, progress_callback, curr
             return nil 
         end
         
-        -- Optimization: Adopt "extract from start" approach which is faster in creengine
-        -- than seeking to arbitrary positions which might trigger re-pagination.
+        -- Optimization: Try to get start XPointer without jumping to avoid "white flash"
         local success, result = pcall(function()
             if progress_callback then progress_callback(0.1) end
             
+            local start_xp = nil
             if start_page and start_page > 1 then
-                -- Seek to start_page to get the incremental start XPointer
                 AIHelper:log("ChapterAnalyzer: getTextForAnalysis - incremental mode from page " .. tostring(start_page))
-                ui.document:gotoPage(start_page)
+                
+                -- Method 1: Use getPageXPointer (fast, no flash)
+                if ui.document.getPageXPointer then
+                    start_xp = ui.document:getPageXPointer(start_page)
+                end
+                
+                -- Method 2: Fallback to jumping (causes flash, but only if Method 1 failed)
+                if not start_xp then
+                    AIHelper:log("ChapterAnalyzer: Fallback to gotoPage for start XPointer")
+                    ui.document:gotoPage(start_page)
+                    start_xp = ui.document:getXPointer()
+                    ui.document:gotoXPointer(current_xp)
+                end
             else
-                -- Go to the very beginning of the book (instant)
-                ui.document:gotoPos(0)
+                -- Beginning of book
+                start_xp = "main.0" -- Common start XPointer for creengine, or just jump to 0
+                if ui.document.gotoPos then
+                    ui.document:gotoPos(0)
+                    start_xp = ui.document:getXPointer()
+                    ui.document:gotoXPointer(current_xp)
+                end
             end
-            local start_xp = ui.document:getXPointer()
             
-            -- Go back to current position
-            ui.document:gotoXPointer(current_xp)
+            if not start_xp then return "" end
             
             if progress_callback then progress_callback(0.3) end
             
@@ -388,8 +402,7 @@ function ChapterAnalyzer:getTextForAnalysis(ui, max_len, progress_callback, curr
         if success and result then
             book_text = result
         else
-            AIHelper:log("ChapterAnalyzer: getTextForAnalysis - XPointer extraction failed")
-            -- Last ditch fallback
+            AIHelper:log("ChapterAnalyzer: getTextForAnalysis - XPointer extraction failed: " .. tostring(result))
             book_text = ""
         end
     else

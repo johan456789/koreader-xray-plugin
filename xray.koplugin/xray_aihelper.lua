@@ -112,19 +112,36 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
     return nil, "error_api", "No API key configured"
 end
 
--- Fork a child process to perform the HTTP request. Returns the temp file path
--- that the parent should poll for, or nil on error.
+-- Fork a child process to perform the HTTP request. Returns true if started.
 function AIHelper:makeRequestAsync(request_params, result_file)
-    local ok_posix, posix = pcall(require, "posix.unistd")
-    if not ok_posix then
-        self:log("AIHelper: posix.unistd not available, cannot fork for async request")
-        return nil
+    local fork = nil
+    
+    -- Method 1: ffiutil (Standard in KOReader)
+    local ok_ffi, ffiutil = pcall(require, "ffiutil")
+    if ok_ffi and ffiutil and ffiutil.fork then
+        fork = ffiutil.fork
+    end
+    
+    -- Method 2: luaposix (Traditional)
+    if not fork then
+        local ok_posix, posix = pcall(require, "posix.unistd")
+        if not ok_posix then
+            ok_posix, posix = pcall(require, "posix")
+        end
+        if ok_posix and posix and posix.fork then
+            fork = posix.fork
+        end
+    end
+    
+    if not fork then
+        self:log("AIHelper: No fork() available (tried ffiutil and posix)")
+        return false
     end
 
-    local pid = posix.fork()
-    if pid == nil then
+    local pid = fork()
+    if pid == nil or pid < 0 then
         self:log("AIHelper: fork() failed")
-        return nil
+        return false
     end
 
     if pid == 0 then
