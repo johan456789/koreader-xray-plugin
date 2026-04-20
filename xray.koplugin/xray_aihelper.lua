@@ -82,8 +82,8 @@ end
 -- Returns: { url, headers, body, provider, model } or nil, error_code, error_msg
 function AIHelper:buildComprehensiveRequest(title, author, context)
     local prompt = self:createPrompt(title, author, context, "comprehensive_xray")
-    local primary = self.settings.primary_ai or { provider = "gemini", model = "gemini-2.0-flash" }
-    local secondary = self.settings.secondary_ai or { provider = "gemini", model = "gemini-1.5-flash" }
+    local primary = self.settings.primary_ai or { provider = "gemini", model = "gemini-2.5-flash" }
+    local secondary = self.settings.secondary_ai or { provider = "gemini", model = "gemini-2.5-flash-lite" }
 
     -- Try primary, then secondary
     for _, ai in ipairs({ primary, secondary }) do
@@ -91,7 +91,7 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
         if config and config.api_key and config.api_key ~= "" then
             local url, headers, body
             if ai.provider == "gemini" then
-                local model = ai.model or "gemini-2.0-flash"
+                local model = ai.model or "gemini-2.5-flash"
                 local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
                 url = "https://generativelanguage.googleapis.com/v1beta/models/" .. model .. ":generateContent"
                 headers = { ["Content-Type"] = "application/json", ["x-goog-api-key"] = config.api_key }
