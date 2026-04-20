@@ -121,7 +121,6 @@ end
 
 function XRayPlugin:onPageUpdate(pageno)
     if not self.auto_fetch_enabled then return end
-    if not self.xray_mode_enabled then return end
     if not self.ui or not self.ui.document then return end
 
     -- Resolve current chapter title from TOC
@@ -137,6 +136,41 @@ function XRayPlugin:onPageUpdate(pageno)
         end
     end
     if not chapter_title then return end
+
+    -- Skip non-narrative chapters (Frontmatter/Backmatter)
+    if self:isNonNarrativeChapter(chapter_title) then 
+        if not self.chapters_fetched[chapter_title] then
+            self:log("XRayPlugin: Skipping non-narrative chapter: " .. tostring(chapter_title))
+            self.chapters_fetched[chapter_title] = true
+        end
+        return 
+    end
+
+    -- Check if it's already populated in the timeline data
+    local is_populated = false
+    local norm_title = self:normalizeChapterName(chapter_title)
+    for _, ev in ipairs(self.timeline or {}) do
+        if self:normalizeChapterName(ev.chapter or "") == norm_title then
+            is_populated = true
+            break
+        end
+    end
+
+    if is_populated then
+        if not self.chapters_fetched[chapter_title] then
+            self:log("XRayPlugin: Chapter already populated in data: " .. tostring(chapter_title))
+        end
+        self.chapters_fetched[chapter_title] = true
+        return
+    end
+
+    -- It is NOT populated. Limit retries to prevent API spamming.
+    self.fetch_attempts = self.fetch_attempts or {}
+    if (self.fetch_attempts[chapter_title] or 0) >= 3 then
+        self:log("XRayPlugin: Max fetch attempts reached for: " .. tostring(chapter_title))
+        self.chapters_fetched[chapter_title] = true
+        return
+    end
 
     -- Already fetched this chapter this session?
     if self.chapters_fetched[chapter_title] then return end
@@ -163,6 +197,21 @@ function XRayPlugin:triggerBackgroundMergeFetch(chapter_title)
     -- SILENT NETWORK CHECK: use isOnline() instead of runWhenOnline to avoid "white box" connecting dialogs
     local NetworkMgr = require("ui/network/manager")
     if NetworkMgr:isOnline() then
+        -- Safety Check: Ensure API keys are configured before background activity
+        if not self.ai_helper:hasApiKey() then
+            self:log("XRayPlugin: Skipping auto-fetch (No API keys configured)")
+            return
+        end
+
+        -- Cooldown check to prevent API spamming
+        local cooldown = self.ai_helper.settings and self.ai_helper.settings.auto_fetch_cooldown or 300
+        local now = os.time()
+        if self.last_bg_fetch_time and (now - self.last_bg_fetch_time) < cooldown then
+            self:log("XRayPlugin: Skipping auto-fetch (cooldown active: " .. (cooldown - (now - self.last_bg_fetch_time)) .. "s left)")
+            return
+        end
+        self.last_bg_fetch_time = now
+
         local current_page = self.ui:getCurrentPage()
         local total_pages = self.ui.document:getPageCount()
         if not total_pages or total_pages == 0 then return end
@@ -175,9 +224,17 @@ function XRayPlugin:triggerBackgroundMergeFetch(chapter_title)
         
         local last_fetch_page = self.book_data and self.book_data.last_fetch_page
         
-        self:log("XRayPlugin: Auto-merge fetch for chapter: " .. tostring(chapter_title))
-        self:continueWithFetch(reading_percent, true, last_fetch_page, true) -- is_update=true, is_silent=true
-        self.chapters_fetched[chapter_title] = true
+        local is_update = true
+        if not self.timeline or #self.timeline == 0 then
+            is_update = false
+            self:log("XRayPlugin: Cache is empty. Switching to normal fetch instead of merge.")
+        else
+            self:log("XRayPlugin: Auto-merge fetch for chapter: " .. tostring(chapter_title))
+        end
+        
+        self.fetch_attempts = self.fetch_attempts or {}
+        self.fetch_attempts[chapter_title] = (self.fetch_attempts[chapter_title] or 0) + 1
+        self:continueWithFetch(reading_percent, is_update, last_fetch_page, true) -- is_silent=true
     else
         -- Silently skip if offline
         self:log("XRayPlugin: Skipping auto-merge (offline)")
@@ -317,15 +374,9 @@ function XRayPlugin:getSubMenuItems()
                     callback = function() self:showSpoilerSettings() end,
                 },
                 {
-                    text = "Auto-update on new chapter",
+                    text = self.loc:t("menu_auto_update_frequency") or "Auto X-Ray Settings",
                     keep_menu_open = true,
-                    checked_func = function()
-                        return self.auto_fetch_enabled == true
-                    end,
-                    callback = function()
-                        self.auto_fetch_enabled = not self.auto_fetch_enabled
-                        self.ai_helper:saveSettings({ auto_fetch_on_chapter = self.auto_fetch_enabled })
-                    end,
+                    callback = function() self:showAutoUpdateSettings() end,
                 },
                 {
                     text = self.loc:t("menu_xray_mode"),
@@ -526,6 +577,99 @@ function XRayPlugin:updateFromAI()
     end)
 end
 
+function XRayPlugin:showAutoUpdateSettings()
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local info_dialog
+    
+    local function showSettings()
+        if info_dialog then UIManager:close(info_dialog) end
+        local is_enabled = self.auto_fetch_enabled
+        local current_cooldown = self.ai_helper.settings and self.ai_helper.settings.auto_fetch_cooldown or 300
+        
+        info_dialog = ButtonDialog:new{
+            title = self.loc:t("menu_auto_update_frequency") or "Auto X-Ray Settings",
+            text = "Background fetching frequency:",
+            buttons = {
+                {
+                    {
+                        text = (not is_enabled and "[✓] " or "[  ] ") .. (self.loc:t("auto_update_disabled") or "Disabled"),
+                        align = "left",
+                        callback = function()
+                            self.auto_fetch_enabled = false
+                            self.ai_helper:saveSettings({ auto_fetch_on_chapter = false })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = (is_enabled and current_cooldown == 0 and "[✓] " or "[  ] ") .. (self.loc:t("auto_update_aggressive") or "Aggressive: checks every new chapter"),
+                        align = "left",
+                        callback = function()
+                            self.auto_fetch_enabled = true
+                            self.ai_helper:saveSettings({ auto_fetch_on_chapter = true, auto_fetch_cooldown = 0 })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = (is_enabled and current_cooldown == 300 and "[✓] " or "[  ] ") .. (self.loc:t("auto_update_balanced") or "Balanced: checks at most every 5 mins"),
+                        align = "left",
+                        callback = function()
+                            self.auto_fetch_enabled = true
+                            self.ai_helper:saveSettings({ auto_fetch_on_chapter = true, auto_fetch_cooldown = 300 })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = (is_enabled and current_cooldown == 900 and "[✓] " or "[  ] ") .. (self.loc:t("auto_update_economical") or "Economical: checks at most every 15 mins"),
+                        align = "left",
+                        callback = function()
+                            self.auto_fetch_enabled = true
+                            self.ai_helper:saveSettings({ auto_fetch_on_chapter = true, auto_fetch_cooldown = 900 })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = (is_enabled and current_cooldown == 1800 and "[✓] " or "[  ] ") .. (self.loc:t("auto_update_sparse") or "Sparse: checks at most every 30 mins"),
+                        align = "left",
+                        callback = function()
+                            self.auto_fetch_enabled = true
+                            self.ai_helper:saveSettings({ auto_fetch_on_chapter = true, auto_fetch_cooldown = 1800 })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = self.loc:t("menu_about") or "About",
+                        callback = function()
+                            UIManager:show(InfoMessage:new{
+                                text = self.loc:t("auto_update_freq_about") or "Auto-update checks for new chapter data in the background as you read.\n\nLIMITS & PERFORMANCE\nFrequent background requests can drain BATTERY LIFE and may hit AI PROVIDER RATE LIMITS.\n\nMODES\n• Disabled: No background requests\n• Aggressive: Checks every time you enter a new chapter\n• Balanced: Checks at most every 5 minutes (recommended)\n• Economical: Checks at most every 15 minutes\n• Sparse: Checks at most every 30 minutes\n\nNote: skipped chapters will be included in the next update.",
+                                timeout = 120
+                            })
+                        end
+                    },
+                    {
+                        text = self.loc:t("close") or "Close",
+                        callback = function()
+                            UIManager:close(info_dialog)
+                        end
+                    }
+                }
+            }
+        }
+        UIManager:show(info_dialog)
+    end
+    
+    showSettings()
+end
+
 function XRayPlugin:showSpoilerSettings()
     local ButtonDialog = require("ui/widget/buttondialog")
     local info_dialog
@@ -631,6 +775,9 @@ local function sanitizeMetadata(val)
 end
 
 function XRayPlugin:continueWithFetch(reading_percent, is_update, last_fetch_page, is_silent)
+    if is_silent then
+        self.bg_fetch_active = true
+    end
     if not self.ai_helper then
         local AIHelper = require("xray_aihelper")
         self.ai_helper = AIHelper
@@ -654,8 +801,48 @@ function XRayPlugin:continueWithFetch(reading_percent, is_update, last_fetch_pag
 
         -- 1. Extraction (Main Thread)
         local current_page = self.ui:getCurrentPage()
-        local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 20000, nil, current_page, last_fetch_page)
-        local samples, chapter_titles = self.chapter_analyzer:getDetailedChapterSamples(self.ui, 200, 150000, reading_percent == 100, last_fetch_page)
+        
+        -- Find the earliest missing narrative chapter to ensure we recover it (Repair logic)
+        local first_missing_page = last_fetch_page
+        if is_update then
+            local toc = self.ui.document:getToc() or {}
+            for i, entry in ipairs(toc) do
+                -- Only check up to current page
+                if entry.page and entry.page > current_page then break end
+                
+                if not self:isNonNarrativeChapter(entry.title) then
+                    local norm = self:normalizeChapterName(entry.title)
+                    local found = false
+                    for _, ev in ipairs(self.timeline or {}) do
+                        if self:normalizeChapterName(ev.chapter or "") == norm then
+                            found = true
+                            break
+                        end
+                    end
+                    if not found then
+                        -- This chapter is missing! Start extraction from here to recover it.
+                        if not first_missing_page or entry.page < first_missing_page then
+                            first_missing_page = entry.page
+                            self:log("XRayPlugin: Repair mode active: recovering missing chapter '" .. tostring(entry.title) .. "' starting at page " .. tostring(entry.page))
+                        end
+                    end
+                end
+            end
+        end
+
+        local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 20000, nil, current_page, first_missing_page)
+        
+        -- Build set of already-known chapters for smart sampling
+        local known_chapters = {}
+        if is_update and self.timeline then
+            for _, ev in ipairs(self.timeline) do
+                if ev.chapter then
+                    known_chapters[self:normalizeChapterName(ev.chapter)] = true
+                end
+            end
+        end
+        
+        local samples, chapter_titles = self.chapter_analyzer:getDetailedChapterSamples(self.ui, 200, 150000, reading_percent == 100, first_missing_page, known_chapters)
         local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui)
         
         if (not book_text or #book_text < 10) and not samples then
@@ -687,12 +874,12 @@ function XRayPlugin:continueWithFetch(reading_percent, is_update, last_fetch_pag
             local req_params, err_code, err_msg = self.ai_helper:buildComprehensiveRequest(title, author, context)
             if not req_params then
                 self:log("XRayPlugin: Failed to build async request: " .. tostring(err_msg))
+                self.bg_fetch_active = false
                 return
             end
             
             local DataStorage = require("datastorage")
             local result_file = DataStorage:getSettingsDir() .. "/xray/bg_fetch_" .. tostring(os.time()) .. ".json"
-            self.bg_fetch_active = true
             local started = self.ai_helper:makeRequestAsync(req_params, result_file)
             if started then
                 self:pollBackgroundFetch(result_file, title, author, book_text, is_update, current_page)
@@ -781,10 +968,16 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
     end
 
     if is_update then
+        -- Ensure tables exist before attempting to merge/insert
+        self.characters = self.characters or {}
+        self.historical_figures = self.historical_figures or {}
+        self.locations = self.locations or {}
+        self.timeline = self.timeline or {}
+
         -- Merge characters
         for _, new_char in ipairs(final_book_data.characters or {}) do
             local found = false
-            for _, existing_char in ipairs(self.characters or {}) do
+            for _, existing_char in ipairs(self.characters) do
                 if existing_char.name:lower() == new_char.name:lower() then
                     existing_char.role = new_char.role
                     -- Replace existing description with the AI's rewritten cohesive summary
@@ -838,6 +1031,23 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
                 end
             end
             if not found then table.insert(self.timeline, new_event) end
+        end
+
+        -- Sort timeline chronologically based on TOC position
+        local toc = self.ui.document:getToc()
+        if toc and #toc > 0 then
+            local chapter_order = {}
+            for i, entry in ipairs(toc) do
+                local norm = self:normalizeChapterName(entry.title)
+                if not chapter_order[norm] then
+                    chapter_order[norm] = i
+                end
+            end
+            table.sort(self.timeline, function(a, b)
+                local order_a = chapter_order[self:normalizeChapterName(a.chapter or "")] or 9999
+                local order_b = chapter_order[self:normalizeChapterName(b.chapter or "")] or 9999
+                return order_a < order_b
+            end)
         end
     else
         self.characters = final_book_data.characters

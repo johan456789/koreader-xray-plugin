@@ -118,6 +118,13 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
     return nil, "error_api", "No API key configured"
 end
 
+-- Check if at least one API key is configured
+function AIHelper:hasApiKey()
+    if self.providers.gemini and self.providers.gemini.api_key and self.providers.gemini.api_key ~= "" then return true end
+    if self.providers.chatgpt and self.providers.chatgpt.api_key and self.providers.chatgpt.api_key ~= "" then return true end
+    return false
+end
+
 -- Fork a child process to perform the HTTP request. Returns true if started.
 function AIHelper:makeRequestAsync(request_params, result_file)
     local ok_ffi, ffiutil = pcall(require, "ffi/util")

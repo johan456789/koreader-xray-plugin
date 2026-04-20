@@ -473,7 +473,7 @@ function ChapterAnalyzer:getAnnotationsForAnalysis(ui)
 end
 
 -- Get detailed samples (Start/Mid/End) from each chapter
-function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit, is_full_book, start_page)
+function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit, is_full_book, start_page, known_chapters)
     if not ui or not ui.document then return nil, nil end
     
     local toc = ui.document:getToc()
@@ -500,7 +500,7 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
     local non_narrative_patterns = {
         "^cover$", "^title", "^copyright", "^table of contents", "^contents$",
         "^dedication", "^acknowledgment", "^also by", "^about the author",
-        "^epilogue$", "^epigraph$", "^foreword$", "^preface$", "^introduction$",
+        "^epigraph$", "^foreword$", "^preface$",
         "^appendix", "^glossary", "^index$", "^notes$", "^bibliography",
         "^colophon", "^frontispiece",
     }
@@ -511,6 +511,12 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
             if lower:match(pat) then return true end
         end
         return false
+    end
+
+    -- Helper to normalize title for comparison (matching main.lua logic roughly)
+    local function normalize(t)
+        if not t then return "" end
+        return t:lower():gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""):gsub("^chapter%s*", ""):gsub("^ch%.?%s*", "")
     end
 
     -- Filter chapters
@@ -529,7 +535,16 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
             if start_page and not is_full_book then
                 local next_chapter_page = toc[i+1] and toc[i+1].page or math.huge
                 if next_chapter_page <= start_page then
-                    skip = true
+                    -- ONLY skip if it's already in our data
+                    if known_chapters then
+                        local norm_title = normalize(chapter.title)
+                        if known_chapters[norm_title] then
+                            skip = true
+                        end
+                    else
+                        -- Fallback to old behavior if no list provided
+                        skip = true
+                    end
                 end
             end
             
