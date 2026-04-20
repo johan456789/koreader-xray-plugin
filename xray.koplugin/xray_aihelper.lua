@@ -82,8 +82,8 @@ end
 -- Returns: { url, headers, body, provider, model } or nil, error_code, error_msg
 function AIHelper:buildComprehensiveRequest(title, author, context)
     local prompt = self:createPrompt(title, author, context, "comprehensive_xray")
-    local primary = self.settings.primary_ai or { provider = "gemini", model = "gemini-2.5-flash" }
-    local secondary = self.settings.secondary_ai or { provider = "gemini", model = "gemini-2.5-flash-lite" }
+    local primary = self.settings.primary_ai or { provider = "gemini", model = "gemini-2.0-flash" }
+    local secondary = self.settings.secondary_ai or { provider = "gemini", model = "gemini-1.5-flash" }
 
     -- Try primary, then secondary
     for _, ai in ipairs({ primary, secondary }) do
@@ -91,13 +91,19 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
         if config and config.api_key and config.api_key ~= "" then
             local url, headers, body
             if ai.provider == "gemini" then
-                local model = ai.model or "gemini-2.5-flash"
+                local model = ai.model or "gemini-2.0-flash"
                 local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
                 url = "https://generativelanguage.googleapis.com/v1beta/models/" .. model .. ":generateContent"
                 headers = { ["Content-Type"] = "application/json", ["x-goog-api-key"] = config.api_key }
                 body = json.encode({
                     contents = {{ role = "user", parts = {{ text = prompt }} }},
                     system_instruction = { parts = {{ text = system_instruction_text }} },
+                    safetySettings = {
+                        { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "BLOCK_NONE" },
+                        { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "BLOCK_NONE" },
+                        { category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_NONE" },
+                        { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_NONE" }
+                    },
                     generationConfig = { temperature = 0.2, maxOutputTokens = 8192 }
                 })
             else
@@ -114,64 +120,12 @@ end
 
 -- Fork a child process to perform the HTTP request. Returns true if started.
 function AIHelper:makeRequestAsync(request_params, result_file)
-    local fork = nil
-    
-    -- Method 1: ffi/util (Standard in KOReader)
     local ok_ffi, ffiutil = pcall(require, "ffi/util")
     if not ok_ffi then
         ok_ffi, ffiutil = pcall(require, "ffiutil")
     end
     
-    if ok_ffi and ffiutil then
-        if ffiutil.fork then
-            fork = ffiutil.fork
-        elseif ffiutil.runInSubProcess then
-            -- ffiutil.runInSubProcess(func, pipe) returns pid, read_fd
-            -- We can use it as a fork fallback if it just takes a function
-            fork = function()
-                -- This is a bit of a hack, but let's see if we can just get a raw fork
-                -- Most KOReader versions with ffi/util also have posix.fork available globally
-                -- or via ffi.C.fork
-                return nil -- fallback to posix
-            end
-        end
-    end
-    
-    -- Method 2: luaposix (Traditional)
-    if not fork then
-        local ok_posix, posix = pcall(require, "posix.unistd")
-        if not ok_posix then
-            ok_posix, posix = pcall(require, "posix")
-        end
-        if ok_posix and posix and posix.fork then
-            fork = posix.fork
-        end
-    end
-    
-    -- Method 3: FFI raw fork (Last resort for Android)
-    if not fork then
-        local ok_f, ffi = pcall(require, "ffi")
-        if ok_f then
-            pcall(function()
-                ffi.cdef[[ int fork(void); ]]
-                fork = ffi.C.fork
-            end)
-        end
-    end
-    
-    if not fork then
-        self:log("AIHelper: No fork() available (tried ffi/util, posix, and ffi.C)")
-        return false
-    end
-
-    local pid = fork()
-    if pid == nil or pid < 0 then
-        self:log("AIHelper: fork() failed")
-        return false
-    end
-
-    if pid == 0 then
-        -- CHILD PROCESS: do the HTTP request synchronously and write result to file
+    local function child_logic(pid, write_fd)
         local child_ok, child_err = pcall(function()
             local http_req = require("socket.http")
             local https_req = require("ssl.https")
@@ -192,7 +146,7 @@ function AIHelper:makeRequestAsync(request_params, result_file)
             socketutil_req:reset_timeout()
             local response_text = table.concat(response_body)
 
-            -- Write result: first line = HTTP code, rest = response body
+            -- Write result to file
             local f = io.open(result_file, "w")
             if f then
                 f:write(tostring(code) .. "\n")
@@ -201,9 +155,8 @@ function AIHelper:makeRequestAsync(request_params, result_file)
                 f:close()
             end
         end)
-
+        
         if not child_ok then
-            -- Write error marker
             local f = io.open(result_file, "w")
             if f then
                 f:write("ERROR\n")
@@ -213,12 +166,66 @@ function AIHelper:makeRequestAsync(request_params, result_file)
             end
         end
 
-        posix._exit(0)  -- Exit child cleanly without running atexit handlers
-    else
-        -- PARENT PROCESS: store child PID for waitpid later
-        self._async_child_pid = pid
-        return result_file
+        -- On some platforms, ffiutil.runInSubProcess handles the exit.
+        -- If we are in a raw fork, we need to exit manually.
+        if not pid or pid == 0 then
+            local posix_ok, posix = pcall(require, "posix.unistd")
+            if posix_ok and posix and posix._exit then
+                posix._exit(0)
+            else
+                os.exit(0)
+            end
+        end
     end
+
+    -- Method 1: ffiutil.runInSubProcess (Preferred KOReader pattern)
+    if ok_ffi and ffiutil and ffiutil.runInSubProcess then
+        self:log("AIHelper: Trying ffiutil.runInSubProcess")
+        local pid, read_fd = ffiutil.runInSubProcess(child_logic, true)
+        if pid and pid > 0 then
+            -- We don't need the pipe for now as we use the result_file
+            if read_fd then
+                local ffi = require("ffi")
+                ffi.C.close(read_fd)
+            end
+            self._async_child_pid = pid
+            return true
+        end
+    end
+
+    -- Method 2: Manual fork fallbacks
+    local fork = nil
+    if ok_ffi and ffiutil and ffiutil.fork then
+        fork = ffiutil.fork
+    else
+        local ok_posix, posix = pcall(require, "posix.unistd")
+        if not ok_posix then ok_posix, posix = pcall(require, "posix") end
+        if ok_posix and posix and posix.fork then
+            fork = posix.fork
+        else
+            local ok_f, ffi = pcall(require, "ffi")
+            if ok_f then
+                pcall(function()
+                    ffi.cdef[[ int fork(void); ]]
+                    fork = ffi.C.fork
+                end)
+            end
+        end
+    end
+    
+    if fork then
+        local pid = fork()
+        if pid == 0 then
+            child_logic(0, nil)
+            return true -- unreachable but for completeness
+        elseif pid and pid > 0 then
+            self._async_child_pid = pid
+            return true
+        end
+    end
+
+    self:log("AIHelper: All background fetch methods failed (tried runInSubProcess and fork)")
+    return false
 end
 
 -- Check if the async result file exists and parse it. Returns:

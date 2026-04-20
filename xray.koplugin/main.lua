@@ -723,6 +723,14 @@ end
 function XRayPlugin:pollBackgroundFetch(result_file, title, author, book_text, is_update, current_page)
     local poll_count = 0
     local function check()
+        -- Ensure we are still in a valid state
+        if not self.ui or not self.ui.document then
+            self:log("XRayPlugin: Polling aborted (document closed)")
+            os.remove(result_file)
+            self.bg_fetch_active = false
+            return
+        end
+
         poll_count = poll_count + 1
         local data, err_code, err_msg = self.ai_helper:checkAsyncResult(result_file)
         
@@ -733,6 +741,7 @@ function XRayPlugin:pollBackgroundFetch(result_file, title, author, book_text, i
             else
                 self:log("XRayPlugin: Background fetch timed out")
                 os.remove(result_file)
+                self.bg_fetch_active = false
             end
         elseif data == false then
             -- Failed
