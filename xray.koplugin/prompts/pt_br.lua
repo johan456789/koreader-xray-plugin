@@ -4,7 +4,9 @@ return {
 
     -- Mensagem apenas para o autor (Para busca rápida de biografia)
     author_only = [[Identifique e forneça a biografia do autor do livro "%s". 
-Os metadatos sugerem que o autor é "%s", mas verifique isso com base no título do livro.
+Os metadatos sugerem que o autor é "%s". 
+
+CRÍTICO: Verifique o autor usando o CONTEXTO DO TEXTO DO LIVRO (se fornecido no final desta mensagem) para garantir 100% de precisão e evitar identificações incorretas.
 
 FORMATO JSON REQUERIDO:
 {

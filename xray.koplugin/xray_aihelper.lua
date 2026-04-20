@@ -347,8 +347,8 @@ function AIHelper:getBookDataSection(title, author, provider_name, context, sect
     return self:executeUnifiedRequest(prompt)
 end
 
-function AIHelper:getAuthorData(title, author, provider_name)
-    local prompt = self:createPrompt(title, author, nil, "author_only")
+function AIHelper:getAuthorData(title, author, provider_name, context)
+    local prompt = self:createPrompt(title, author, context, "author_only")
     return self:executeUnifiedRequest(prompt)
 end
 

@@ -4,7 +4,9 @@ return {
 
     -- Author-only prompt (For quick bio lookup)
     author_only = [[Identify and provide biography for the author of the book "%s". 
-Metadata suggests the author is "%s", but verify this based on the book title.
+Metadata suggests the author is "%s". 
+
+CRITICAL: Verify the author using the BOOK TEXT CONTEXT (if provided at the end of this prompt) to ensure 100% accuracy and avoid incorrect identifications.
 
 REQUIRED JSON FORMAT:
 {

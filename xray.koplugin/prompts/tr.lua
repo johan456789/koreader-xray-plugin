@@ -4,7 +4,9 @@ return {
 
     -- Sadece yazar için istem (Hızlı biyografi araması için)
     author_only = [["%s" kitabının yazarını belirle ve biyografisini sun. 
-Üstveriler yazarın "%s" olduğunu gösteriyor ancak bunu kitap başlığına göre doğrula.
+Üstveriler yazarın "%s" olduğunu gösteriyor. 
+
+KRİTİK: %100 doğruluk sağlamak ve hatalı kimlik tespitlerini önlemek için yazarı KİTAP METNİ BAĞLAMI (bu istemin sonunda verilmişse) kullanarak doğrula.
 
 GEREKLİ JSON FORMATI:
 {

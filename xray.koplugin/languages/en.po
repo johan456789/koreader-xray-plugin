@@ -806,7 +806,7 @@ msgid "menu_fetch_more_chars"
 msgstr "Fetch More Characters"
 
 msgid "updating_ai"
-msgstr "Updating from %s..."
+msgstr "Updating X-Ray Data..."
 
 msgid "error_info"
 msgstr " Error Occurred!"

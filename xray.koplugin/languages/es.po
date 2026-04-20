@@ -705,5 +705,11 @@ msgstr "Actualizar datos de X-Ray (Combinar)"
 msgid "menu_fetch_more_chars"
 msgstr "Obtener más personajes"
 
+msgid "menu_fetch_full"
+msgstr " Obtener datos de IA (Libro completo)"
+
+msgid "menu_fetch_progress"
+msgstr " Hasta la página actual (SIN SPOILERS)"
+
 msgid "updating_ai"
-msgstr "Actualizando desde %s..."
+msgstr "Actualizando datos de X-Ray..."

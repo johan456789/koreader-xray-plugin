@@ -232,74 +232,84 @@ function XRayPlugin:getSubMenuItems()
             separator = true,
         },
         {
-            text = "Spoiler Settings",
-            keep_menu_open = true,
-            callback = function() self:showSpoilerSettings() end,
-        },
-        {
-            text = self.loc:t("menu_clear_cache"),
-            keep_menu_open = true,
-            callback = function() self:clearCache() end,
-        },
-        {
-            text = self.loc:t("menu_xray_mode"),
-            keep_menu_open = true,
-            callback = function() self:toggleXRayMode() end,
-            separator = true,
-        },
-        {
-            text = self.loc:t("menu_ai_settings"),
+            text = "Settings",
             keep_menu_open = true,
             sub_item_table = {
                 {
-                    text = "Primary AI Model",
+                    text = "Spoiler Settings",
                     keep_menu_open = true,
-                    sub_item_table_func = function() return self:getAIModelSelectionMenu("primary") end
+                    callback = function() self:showSpoilerSettings() end,
                 },
                 {
-                    text = "Secondary AI Model",
+                    text = self.loc:t("menu_xray_mode"),
                     keep_menu_open = true,
-                    sub_item_table_func = function() return self:getAIModelSelectionMenu("secondary") end,
-                    separator = true,
+                    callback = function() self:toggleXRayMode() end,
                 },
                 {
-                    text = self.loc:t("menu_gemini_key"), 
+                    text = self.loc:t("menu_language") or "Language",
                     keep_menu_open = true,
-                    sub_item_table_func = function() return self:getAPIKeySelectionMenu("gemini", "Google Gemini") end,
-                    separator = true,
+                    callback = function() self:showLanguageSelection() end,
                 },
                 {
-                    text = self.loc:t("menu_chatgpt_key"), 
+                    text = self.loc:t("menu_ai_settings"),
                     keep_menu_open = true,
-                    sub_item_table_func = function() return self:getAPIKeySelectionMenu("chatgpt", "ChatGPT") end,
-                    separator = true,
-                },
-                {
-                    text = "View All Config Values", 
-                    keep_menu_open = true,
-                    callback = function() self:showConfigSummary() end,
-                },
+                    sub_item_table = {
+                        {
+                            text = "Primary AI Model",
+                            keep_menu_open = true,
+                            sub_item_table_func = function() return self:getAIModelSelectionMenu("primary") end
+                        },
+                        {
+                            text = "Secondary AI Model",
+                            keep_menu_open = true,
+                            sub_item_table_func = function() return self:getAIModelSelectionMenu("secondary") end,
+                            separator = true,
+                        },
+                        {
+                            text = self.loc:t("menu_gemini_key"), 
+                            keep_menu_open = true,
+                            sub_item_table_func = function() return self:getAPIKeySelectionMenu("gemini", "Google Gemini") end,
+                            separator = true,
+                        },
+                        {
+                            text = self.loc:t("menu_chatgpt_key"), 
+                            keep_menu_open = true,
+                            sub_item_table_func = function() return self:getAPIKeySelectionMenu("chatgpt", "ChatGPT") end,
+                            separator = true,
+                        },
+                        {
+                            text = "View All Config Values", 
+                            keep_menu_open = true,
+                            callback = function() self:showConfigSummary() end,
+                        },
+                    }
+                }
             }
         },
         {
-            text = self.loc:t("menu_language") or "Language",
+            text = "Maintenance",
             keep_menu_open = true,
-            callback = function() self:showLanguageSelection() end,
-            separator = true,
-        },
-        {
-            text = self.loc:t("updater_check") or "Check for Updates",
-            keep_menu_open = true,
-            callback = function()
-                local updater = require("xray_updater")
-                updater.checkForUpdates(self.loc)
-            end,
-            separator = true,
-        },
-        {
-            text = self.loc:t("menu_about"),
-            keep_menu_open = true,
-            callback = function() self:showAbout() end,
+            sub_item_table = {
+                {
+                    text = self.loc:t("menu_clear_cache"),
+                    keep_menu_open = true,
+                    callback = function() self:clearCache() end,
+                },
+                {
+                    text = self.loc:t("updater_check") or "Check for Updates",
+                    keep_menu_open = true,
+                    callback = function()
+                        local updater = require("xray_updater")
+                        updater.checkForUpdates(self.loc)
+                    end,
+                    separator = true,
+                },
+                {
+                    text = self.loc:t("menu_about"),
+                    keep_menu_open = true,
+                    callback = function() self:showAbout() end,
+                }
+            }
         },
     }
     
@@ -740,8 +750,15 @@ function XRayPlugin:fetchAuthorInfo()
     UIManager:scheduleIn(0.5, function()
         if is_cancelled then return end
         
+        if not self.chapter_analyzer then
+            local ChapterAnalyzer = require("xray_chapteranalyzer")
+            self.chapter_analyzer = ChapterAnalyzer:new()
+        end
+        local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 1000, nil, self.ui:getCurrentPage())
+        local context = { book_text = book_text }
+        
         self.ai_helper:setTrapWidget(wait_msg)
-        local author_data, error_code, error_msg = self.ai_helper:getAuthorData(title, author, nil)
+        local author_data, error_code, error_msg = self.ai_helper:getAuthorData(title, author, nil, context)
         self.ai_helper:resetTrapWidget()
         
         if wait_msg then UIManager:close(wait_msg) end
@@ -762,6 +779,7 @@ function XRayPlugin:fetchAuthorInfo()
         }
         if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
         local cache = self.cache_manager:loadCache(self.ui.document.file) or {}
+        cache.author_info = self.author_info
         cache.author = self.author_info.name; cache.author_bio = self.author_info.description; cache.author_birth = self.author_info.birthDate; cache.author_death = self.author_info.deathDate
         self.cache_manager:saveCache(self.ui.document.file, cache)
         self:showAuthorInfo()
@@ -963,11 +981,11 @@ end
 
 function XRayPlugin:getAIModelSelectionMenu(setting_type)
     local models = {
-        { name = "Google Gemini Flash (gemini-2.5-flash)", provider = "gemini", id = "gemini-2.5-flash" },
-        { name = "Google Gemini Flash-Lite (gemini-2.5-flash-lite)", provider = "gemini", id = "gemini-2.5-flash-lite" },
-        { name = "Google Gemini Pro (gemini-1.5-pro)", provider = "gemini", id = "gemini-1.5-pro" },
-        { name = "ChatGPT Mini (gpt-4o-mini)", provider = "chatgpt", id = "gpt-4o-mini" },
-        { name = "ChatGPT (gpt-4o)", provider = "chatgpt", id = "gpt-4o" },
+        { name = "Gemini Flash (gemini-2.5-flash) - free", provider = "gemini", id = "gemini-2.5-flash" },
+        { name = "Gemini Flash-Lite (gemini-2.5-flash-lite) - free", provider = "gemini", id = "gemini-2.5-flash-lite" },
+        { name = "Gemini Pro (gemini-1.5-pro) - paid", provider = "gemini", id = "gemini-1.5-pro" },
+        { name = "ChatGPT Mini (gpt-4o-mini) - paid", provider = "chatgpt", id = "gpt-4o-mini" },
+        { name = "ChatGPT (gpt-4o) - paid", provider = "chatgpt", id = "gpt-4o" },
     }
     
     local menu_items = {}

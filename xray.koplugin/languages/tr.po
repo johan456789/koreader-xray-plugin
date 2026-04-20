@@ -40,5 +40,11 @@ msgstr "X-Ray Verilerini Güncelle (Birleştir)"
 msgid "menu_fetch_more_chars"
 msgstr "Daha Fazla Karakter Getir"
 
+msgid "menu_fetch_full"
+msgstr " AI Verilerini Çek (Tam Kitap)"
+
+msgid "menu_fetch_progress"
+msgstr " Mevcut Sayfaya Kadar (SPOILERSIZ)"
+
 msgid "updating_ai"
-msgstr "%s üzerinden güncelleniyor..."
+msgstr "X-Ray Verileri Güncelleniyor..."

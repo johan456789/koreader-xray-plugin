@@ -37,5 +37,11 @@ msgstr "Atualizar dados do X-Ray (Mesclar)"
 msgid "menu_fetch_more_chars"
 msgstr "Buscar mais personagens"
 
+msgid "menu_fetch_full"
+msgstr " Buscar dados de IA (Livro completo)"
+
+msgid "menu_fetch_progress"
+msgstr " Até a página atual (SEM SPOILERS)"
+
 msgid "updating_ai"
-msgstr "Atualizando de %s..."
+msgstr "Atualizando dados do X-Ray..."
