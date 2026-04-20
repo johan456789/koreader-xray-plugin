@@ -4,7 +4,9 @@ return {
 
     -- Mensaje solo para el autor (Para búsqueda rápida de biografía)
     author_only = [[Identifica y proporciona una biografía del autor del libro "%s". 
-Los metadatos sugieren que el autor es "%s", pero verifícalo basándote en el título del libro.
+Los metadatos sugieren que el autor es "%s". 
+
+CRÍTICO: Verifica el autor utilizando el CONTEXTO DEL TEXTO DEL LIBRO (si se proporciona al final de este mensaje) para garantizar el 100% de precisión y evitar identificaciones incorrectas.
 
 FORMATO JSON REQUERIDO:
 {
@@ -87,6 +89,38 @@ FORMATO JSON REQUERIDO:
     {
       "chapter": "Título exacto del capítulo de las muestras",
       "event": "Evento narrativo clave de este capítulo (Máx 150 caracteres)"
+    }
+  ]
+} ]],
+
+    -- Obtención de más personajes (Bypass del límite de IA)
+    more_characters = [[Libro: %s
+Autor: %s
+Progreso de lectura: %d%%
+
+TAREA: Extrae EXACTAMENTE 10 personajes importantes ADICIONALES del texto.
+Devuelve ÚNICAMENTE un objeto JSON válido.
+
+MANDATO DE BREVEDAD (CRÍTICO):
+Para evitar el truncamiento de la respuesta de la IA, mantén las descripciones de los personajes por debajo de los 250 caracteres.
+
+INSTRUCCIÓN CRÍTICA:
+NO incluyas ninguno de los siguientes personajes, ya que ya han sido extraídos:
+%s
+
+REGLAS ESTRICTAS SOBRE SPOILERS:
+- ABSOLUTAMENTE NINGUNA información posterior al progreso de lectura actual. Detente exactamente en la marca del %d%%.
+- Las descripciones deben reflejar el estado de los personajes en este punto exacto del libro.
+
+FORMATO JSON REQUERIDO:
+{
+  "characters": [
+    {
+      "name": "Nombre Formal Completo",
+      "role": "Papel hasta el progreso actual",
+      "gender": "Masculino / Femenino / Desconocido",
+      "occupation": "Trabajo/Estado",
+      "description": "Análisis profundo con detalles del texto hasta ahora. SIN SPOILERS. (Máx 300 caracteres)"
     }
   ]
 }]],

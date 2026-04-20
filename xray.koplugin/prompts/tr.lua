@@ -4,7 +4,9 @@ return {
 
     -- Sadece yazar için istem (Hızlı biyografi araması için)
     author_only = [["%s" kitabının yazarını belirle ve biyografisini sun. 
-Üstveriler yazarın "%s" olduğunu gösteriyor ancak bunu kitap başlığına göre doğrula.
+Üstveriler yazarın "%s" olduğunu gösteriyor. 
+
+KRİTİK: %100 doğruluk sağlamak ve hatalı kimlik tespitlerini önlemek için yazarı KİTAP METNİ BAĞLAMI (bu istemin sonunda verilmişse) kullanarak doğrula.
 
 GEREKLİ JSON FORMATI:
 {
@@ -87,6 +89,38 @@ GEREKLİ JSON FORMATI:
     {
       "chapter": "Örneklerdeki Tam Bölüm Başlığı",
       "event": "Bu bölümdeki temel anlatı olayı (Maks 150 karakter)"
+    }
+  ]
+} ]],
+
+    -- Daha fazla karakter getir (AI Limitini Aş)
+    more_characters = [[Kitap: %s
+Yazar: %s
+Okuma İlerlemesi: %%%d
+
+GÖREV: Metinden TAM OLARAK 10 EK önemli karakter çıkar.
+SADECE geçerli bir JSON objesi döndür.
+
+ÖZET MANDATI (KRİTİK):
+AI yanıtının kesilmesini önlemek için karakter açıklamalarını 250 karakterin altında tutun.
+
+KRİTİK TALİMAT:
+Daha önceden çıkarıldıkları için aşağıdaki karakterleri KESİNLİKLE dahil etme:
+%s
+
+KESİN SPOILER KURALLARI:
+- Mevcut okuma ilerlemesinden sonrası hakkında KESİNLİKLE hiçbir bilgi verme. Tam olarak %%%d noktasında dur.
+- Açıklamalar karakterlerin kitabın tam bu noktasındaki durumunu yansıtmalıdır.
+
+GEREKLİ JSON FORMATI:
+{
+  "characters": [
+    {
+      "name": "Tam Resmi İsim",
+      "role": "Mevcut ilerlemeye kadar olan rolü",
+      "gender": "Erkek / Kadın / Bilinmiyor",
+      "occupation": "Meslek/Durum",
+      "description": "Şu ana kadarki metinden detaylarla derin analiz. SPOILER YOK. (Maks 300 karakter)"
     }
   ]
 }]],
