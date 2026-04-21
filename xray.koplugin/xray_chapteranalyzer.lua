@@ -333,6 +333,88 @@ function ChapterAnalyzer:findCharactersInText(text, characters)
     return found_characters
 end
 
+-- Extract text from a specific page range (start_page to end_page)
+-- Returns up to max_len characters from the specified region
+function ChapterAnalyzer:getTextFromPageRange(ui, start_page, end_page, max_len)
+    if not ui or not ui.document then return nil end
+    max_len = max_len or 15000
+    
+    local is_reflowable = ui.rolling ~= nil
+    
+    if is_reflowable then
+        -- Save the reader's actual position so we can restore it
+        local saved_xp = ui.document:getXPointer()
+        
+        local success, result = pcall(function()
+            -- Get XPointer for the start of the range
+            local start_xp = nil
+            if ui.document.getPageXPointer then
+                start_xp = ui.document:getPageXPointer(start_page)
+            end
+            if not start_xp then
+                ui.document:gotoPage(start_page)
+                start_xp = ui.document:getXPointer()
+            end
+            
+            -- Get XPointer for the end of the range
+            local end_xp = nil
+            if ui.document.getPageXPointer then
+                end_xp = ui.document:getPageXPointer(end_page)
+            end
+            if not end_xp then
+                ui.document:gotoPage(end_page)
+                end_xp = ui.document:getXPointer()
+            end
+            
+            if not start_xp or not end_xp then return "" end
+            
+            -- Extract text between the two XPointers
+            local text = ui.document:getTextFromXPointers(start_xp, end_xp) or ""
+            
+            -- Trim to max_len (take from the beginning since we want this specific range)
+            if #text > max_len then
+                text = text:sub(1, max_len)
+            end
+            return text
+        end)
+        
+        -- Always restore the reader's position
+        if saved_xp then
+            pcall(function() ui.document:gotoXPointer(saved_xp) end)
+        end
+        
+        if success and result and #result > 0 then
+            return result
+        end
+        return nil
+    else
+        -- PDF: page-by-page extraction
+        local text = ""
+        for page = start_page, end_page do
+            local page_text = ui.document:getPageText(page) or ""
+            if type(page_text) == "table" then
+                local texts = {}
+                for _, block in ipairs(page_text) do
+                    if type(block) == "table" then
+                        for j = 1, #block do
+                            local span = block[j]
+                            if type(span) == "table" and span.word then
+                                table.insert(texts, span.word)
+                            end
+                        end
+                    end
+                end
+                page_text = table.concat(texts, " ")
+            end
+            text = text .. page_text .. "\n"
+            if #text >= max_len then
+                return text:sub(1, max_len)
+            end
+        end
+        return #text > 0 and text or nil
+    end
+end
+
 -- Get text for analysis (up to max_len characters before current position)
 function ChapterAnalyzer:getTextForAnalysis(ui, max_len, progress_callback, current_page, start_page)
     if not ui or not ui.document then
@@ -560,13 +642,26 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
     
     if #active_chapters == 0 then return nil, nil end
     
+    -- DYNAMIC BUDGET: Scale down for large books to leave room for AI output
+    local num_chapters = #active_chapters
+    if num_chapters > 60 then
+        -- Very large omnibus: aggressive compression
+        total_limit = math.min(total_limit, 60000)
+        AIHelper:log("ChapterAnalyzer: Large book detected (" .. num_chapters .. " chapters). Compressed total_limit to " .. total_limit)
+    elseif num_chapters > 30 then
+        -- Large book: moderate compression
+        total_limit = math.min(total_limit, 100000)
+        AIHelper:log("ChapterAnalyzer: Medium-large book detected (" .. num_chapters .. " chapters). Compressed total_limit to " .. total_limit)
+    end
+
     -- Calculate budget per chapter
     -- Reserve 20k for the main book_text (last 20k)
     local chapter_total_budget = total_limit - 20000
-    local per_chapter_budget = math.floor(chapter_total_budget / #active_chapters)
+    local per_chapter_budget = math.floor(chapter_total_budget / num_chapters)
     
-    -- Hard limit of 3600 per chapter as requested
-    if per_chapter_budget > 3600 then per_chapter_budget = 3600 end
+    -- Dynamic hard limit based on chapter count
+    local max_per_chapter = num_chapters > 60 and 600 or (num_chapters > 30 and 2000 or 3600)
+    if per_chapter_budget > max_per_chapter then per_chapter_budget = max_per_chapter end
     
     -- Minimum budget for it to be useful
     if per_chapter_budget < 300 then per_chapter_budget = 300 end

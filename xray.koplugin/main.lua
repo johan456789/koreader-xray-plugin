@@ -120,28 +120,43 @@ function XRayPlugin:onReaderReady()
 end
 
 function XRayPlugin:onPageUpdate(pageno)
+    self:log("XRayPlugin: onPageUpdate for pageno " .. tostring(pageno))
+    self.last_pageno = pageno
     if not self.auto_fetch_enabled then return end
+    
+    self:log("XRayPlugin: onPageUpdate for pageno " .. tostring(pageno))
     if not self.ui or not self.ui.document then return end
 
     -- Resolve current chapter title from TOC
     local toc = self.ui.document:getToc()
-    if not toc or #toc == 0 then return end
+    if not toc or #toc == 0 then
+        self:log("XRayPlugin: No TOC found for page " .. tostring(pageno))
+        return
+    end
 
     local chapter_title = nil
+    local chapter_page = nil
     for _, entry in ipairs(toc) do
         if entry.page and entry.page <= pageno then
             chapter_title = entry.title
+            chapter_page = entry.page
         else
             break
         end
     end
-    if not chapter_title then return end
+
+    if not chapter_title then
+        self:log("XRayPlugin: No chapter found for page " .. tostring(pageno))
+        return
+    end
+
+    local unique_id = chapter_title .. "_" .. tostring(chapter_page)
 
     -- Skip non-narrative chapters (Frontmatter/Backmatter)
     if self:isNonNarrativeChapter(chapter_title) then 
-        if not self.chapters_fetched[chapter_title] then
-            self:log("XRayPlugin: Skipping non-narrative chapter: " .. tostring(chapter_title))
-            self.chapters_fetched[chapter_title] = true
+        if not self.chapters_fetched[unique_id] then
+            self:log("XRayPlugin: Skipping non-narrative chapter: " .. tostring(chapter_title) .. " (page " .. tostring(chapter_page) .. ")")
+            self.chapters_fetched[unique_id] = true
         end
         return 
     end
@@ -150,37 +165,50 @@ function XRayPlugin:onPageUpdate(pageno)
     local is_populated = false
     local norm_title = self:normalizeChapterName(chapter_title)
     for _, ev in ipairs(self.timeline or {}) do
+        -- For omnibus support, we check both name and page number
         if self:normalizeChapterName(ev.chapter or "") == norm_title then
-            is_populated = true
-            break
+            if not ev.page or ev.page == chapter_page then
+                is_populated = true
+                break
+            end
         end
     end
 
     if is_populated then
-        if not self.chapters_fetched[chapter_title] then
-            self:log("XRayPlugin: Chapter already populated in data: " .. tostring(chapter_title))
+        if not self.chapters_fetched[unique_id] then
+            self:log("XRayPlugin: Chapter already populated in data: " .. tostring(chapter_title) .. " (page " .. tostring(chapter_page) .. ")")
         end
-        self.chapters_fetched[chapter_title] = true
+        self.chapters_fetched[unique_id] = true
         return
     end
 
     -- It is NOT populated. Limit retries to prevent API spamming.
     self.fetch_attempts = self.fetch_attempts or {}
-    if (self.fetch_attempts[chapter_title] or 0) >= 3 then
-        self:log("XRayPlugin: Max fetch attempts reached for: " .. tostring(chapter_title))
-        self.chapters_fetched[chapter_title] = true
+    if (self.fetch_attempts[unique_id] or 0) >= 3 then
+        self:log("XRayPlugin: Max fetch attempts reached for: " .. tostring(unique_id))
+        self.chapters_fetched[unique_id] = true
         return
     end
+    self.last_pageno = pageno
+    self:log("XRayPlugin: onPageUpdate for " .. unique_id)
+
+    if not self.auto_fetch_enabled then return end
 
     -- Already fetched this chapter this session?
-    if self.chapters_fetched[chapter_title] then return end
+    if self.chapters_fetched[unique_id] then 
+        self:log("XRayPlugin: Already fetched chapter this session: " .. tostring(unique_id))
+        return 
+    end
 
     -- Same chapter as before (no change)?
-    if chapter_title == self.last_auto_chapter then return end
-    self.last_auto_chapter = chapter_title
+    if unique_id == self.last_auto_chapter then return end
+    self.last_auto_chapter = unique_id
 
     -- Debounce: ignore if a fetch is already scheduled
-    if self.bg_fetch_pending or self.bg_fetch_active then return end
+    if self.bg_fetch_pending or self.bg_fetch_active then 
+        self:log("XRayPlugin: Fetch already pending/active. Skipping trigger for " .. tostring(chapter_title))
+        return 
+    end
     self.bg_fetch_pending = true
 
     -- Wait 2s for the reader to settle on the new chapter before fetching
@@ -191,7 +219,8 @@ function XRayPlugin:onPageUpdate(pageno)
 end
 
 function XRayPlugin:triggerBackgroundMergeFetch(chapter_title)
-    if self.chapters_fetched[chapter_title] or self.bg_fetch_active then return end
+    self:log("XRayPlugin: triggerBackgroundMergeFetch called for: " .. tostring(chapter_title))
+    if self.bg_fetch_active then return end
     if not self.ui or not self.ui.document then return end
 
     -- SILENT NETWORK CHECK: use isOnline() instead of runWhenOnline to avoid "white box" connecting dialogs
@@ -286,6 +315,15 @@ function XRayPlugin:autoLoadCache()
         self.locations = cached_data.locations or {}
         self.timeline = cached_data.timeline or {}
         self.historical_figures = cached_data.historical_figures or {}
+        -- Fast restore of sort order using the persisted sort_order field.
+        -- Falls back to original list order for items without a sort_order (old cache).
+        local function restoreOrder(list)
+            table.sort(list, function(a, b)
+                return (a.sort_order or 9999) < (b.sort_order or 9999)
+            end)
+        end
+        restoreOrder(self.characters)
+        restoreOrder(self.historical_figures)
         if cached_data.author_info then
             self.author_info = cached_data.author_info
         else
@@ -467,17 +505,72 @@ function XRayPlugin:addToMainMenu(menu_items)
 end
 
 function XRayPlugin:sortDataByFrequency(list, text, key)
-    if not list or #list == 0 or not text then return list end
-    local lower_text = string.lower(text)
+    if not list or #list == 0 then return list end
+
+    -- Role importance weights (higher = more important)
+    local role_weights = {
+        protagonist = 100,
+        main = 90,
+        ["main character"] = 90,
+        deuteragonist = 80,
+        major = 70,
+        antagonist = 70,
+        villain = 70,
+        ["primary antagonist"] = 70,
+        supporting = 40,
+        secondary = 30,
+        minor = 10,
+        background = 5,
+    }
+
+    local lower_text = text and string.lower(text) or ""
+
     for _, item in ipairs(list) do
         local name = item[key or "name"]
         if name then
-            local pattern = string.lower(name):gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1")
-            local _, count = string.gsub(lower_text, pattern, "")
-            item._frequency = count
+            local lower_name = string.lower(name):gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1")
+
+            -- Signal 1: Role weight
+            local role_score = 0
+            local role = string.lower(item.role or "")
+            for role_key, weight in pairs(role_weights) do
+                if role:find(role_key, 1, true) then
+                    if weight > role_score then role_score = weight end
+                end
+            end
+
+            -- Signal 2: Frequency in text (normalized by name length to prevent
+            -- short first-name references inflating minor character scores)
+            local freq = 0
+            if lower_text ~= "" then
+                local _, count = string.gsub(lower_text, lower_name, "")
+                -- Also try matching just the first name (more natural prose refs)
+                local first_name = name:match("^(%S+)")
+                if first_name and #first_name > 3 then
+                    local lower_first = string.lower(first_name):gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1")
+                    local _, first_count = string.gsub(lower_text, lower_first, "")
+                    -- Use max(full_name, first_name/2) to avoid over-weighting common first names
+                    count = math.max(count, math.floor(first_count / 2))
+                end
+                -- Normalize: divide by name length bucket to reduce short-name bias
+                local name_len_factor = math.max(1, math.floor(#name / 4))
+                freq = math.floor(count / name_len_factor)
+            end
+
+            item._sort_score = role_score * 1000 + freq
+        else
+            item._sort_score = 0
         end
     end
-    table.sort(list, function(a, b) return (a._frequency or 0) > (b._frequency or 0) end)
+
+    table.sort(list, function(a, b)
+        return (a._sort_score or 0) > (b._sort_score or 0)
+    end)
+    -- Stamp a persistent sort_order so cache loads can use a cheap numeric sort
+    -- instead of rerunning the full regex-based scoring.
+    for i, item in ipairs(list) do
+        item.sort_order = i
+    end
     return list
 end
 
@@ -525,6 +618,7 @@ function XRayPlugin:showCharacters()
         UIManager:show(InfoMessage:new{ text = self.loc:t("no_character_data"), timeout = 3 })
         return
     end
+
     local items = {
         { text = "⌕ " .. self.loc:t("search_character"), callback = function() self:showCharacterSearch() end },
         { text = "✚ " .. (self.loc:t("menu_fetch_more_chars") or "Fetch More Characters"), callback = function() self:fetchMoreCharacters() end, separator = true },
@@ -535,7 +629,22 @@ function XRayPlugin:showCharacters()
         if char.description and #char.description > 0 then text = text .. "\n  " .. char.description:sub(1, 80) .. (#char.description > 80 and "..." or "") end
         table.insert(items, { text = text, callback = function() self:showCharacterDetails(char) end })
     end
-    UIManager:show(Menu:new{ title = self.loc:t("menu_characters") .. " (" .. #self.characters .. ")", item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
+
+    -- Close any existing character menu before showing the updated one
+    if self.char_menu then
+        UIManager:close(self.char_menu)
+        self.char_menu = nil
+    end
+
+    self.char_menu = Menu:new{
+        title = self.loc:t("menu_characters") .. " (" .. #self.characters .. ")",
+        item_table = items,
+        is_borderless = true,
+        width = Screen:getWidth(),
+        height = Screen:getHeight(),
+        close_callback = function() self.char_menu = nil end,
+    }
+    UIManager:show(self.char_menu)
 end
 
 function XRayPlugin:showCharacterDetails(character)
@@ -737,6 +846,23 @@ local word_to_num = {
     ["forty-one"]=41,["forty-two"]=42,["forty-three"]=43,["forty-four"]=44,["forty-five"]=45,
     ["forty-six"]=46,["forty-seven"]=47,["forty-eight"]=48,["forty-nine"]=49,fifty=50,
 }
+local roman_map = { i = 1, v = 5, x = 10, l = 50, c = 100, d = 500, m = 1000 }
+local function romanToDecimal(s)
+    local res = 0
+    local prev = 0
+    for i = #s, 1, -1 do
+        local curr = roman_map[s:sub(i, i)]
+        if not curr then return nil end
+        if curr < prev then
+            res = res - curr
+        else
+            res = res + curr
+        end
+        prev = curr
+    end
+    return res
+end
+
 function XRayPlugin:normalizeChapterName(name)
     if not name then return "" end
     local s = name:lower():gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
@@ -746,6 +872,15 @@ function XRayPlugin:normalizeChapterName(name)
     end
     -- Strip common prefixes like "chapter" so "chapter 13" and "13" both become "13"
     s = s:gsub("^chapter%s*", ""):gsub("^ch%.?%s*", "")
+    s = s:gsub("^part%s*", ""):gsub("^book%s*", "")
+    
+    -- Try to convert Roman numerals if the remaining string is a valid Roman numeral
+    -- We only do this if it's not already a digit
+    if not s:match("^%d+$") and s:match("^[ivxlcdm]+$") then
+        local dec = romanToDecimal(s)
+        if dec then s = tostring(dec) end
+    end
+    
     return s
 end
 
@@ -806,25 +941,37 @@ function XRayPlugin:continueWithFetch(reading_percent, is_update, last_fetch_pag
         local first_missing_page = last_fetch_page
         if is_update then
             local toc = self.ui.document:getToc() or {}
-            for i, entry in ipairs(toc) do
-                -- Only check up to current page
-                if entry.page and entry.page > current_page then break end
-                
-                if not self:isNonNarrativeChapter(entry.title) then
-                    local norm = self:normalizeChapterName(entry.title)
-                    local found = false
-                    for _, ev in ipairs(self.timeline or {}) do
-                        if self:normalizeChapterName(ev.chapter or "") == norm then
+            
+            -- OMNIBUS OPTIMIZATION: Instead of checking the whole book, 
+            -- find the 3 most recent narrative chapters before the current page.
+            local candidate_chapters = {}
+            for i = #toc, 1, -1 do
+                local entry = toc[i]
+                if entry.page and entry.page <= current_page then
+                    if not self:isNonNarrativeChapter(entry.title) then
+                        table.insert(candidate_chapters, entry)
+                        if #candidate_chapters >= 3 then break end
+                    end
+                end
+            end
+            
+            for _, entry in ipairs(candidate_chapters) do
+                local norm = self:normalizeChapterName(entry.title)
+                local found = false
+                for _, ev in ipairs(self.timeline or {}) do
+                    -- Match by title and page for omnibus support
+                    if self:normalizeChapterName(ev.chapter or "") == norm then
+                        if not ev.page or ev.page == entry.page then
                             found = true
                             break
                         end
                     end
-                    if not found then
-                        -- This chapter is missing! Start extraction from here to recover it.
-                        if not first_missing_page or entry.page < first_missing_page then
-                            first_missing_page = entry.page
-                            self:log("XRayPlugin: Repair mode active: recovering missing chapter '" .. tostring(entry.title) .. "' starting at page " .. tostring(entry.page))
-                        end
+                end
+                if not found then
+                    -- This chapter is missing! Start extraction from here to recover it.
+                    if not first_missing_page or entry.page < first_missing_page then
+                        first_missing_page = entry.page
+                        self:log("XRayPlugin: Repair mode active: recovering missing chapter '" .. tostring(entry.title) .. "' starting at page " .. tostring(entry.page))
                     end
                 end
             end
@@ -990,6 +1137,10 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
             end
             if not found then table.insert(self.characters, new_char) end
         end
+        -- Re-sort the entire character list by frequency in the current context
+        if book_text and #book_text > 0 then
+            self:sortDataByFrequency(self.characters, book_text, "name")
+        end
         -- Merge historical figures
         for _, new_fig in ipairs(final_book_data.historical_figures or {}) do
             local found = false
@@ -1019,34 +1170,67 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
             end
             if not found then table.insert(self.locations, new_loc) end
         end
-        -- Merge timeline (append only if chapter not found)
+        -- Merge timeline (append only if chapter+page not found)
+        local toc = self.ui.document:getToc()
         for _, new_event in ipairs(final_book_data.timeline or {}) do
             local found = false
             local new_norm = self:normalizeChapterName(new_event.chapter or "")
+            
+            -- Assign page number to new event if it doesn't have one
+            if not new_event.page and toc then
+                -- OMNIBUS OPTIMIZATION: Pick the TOC entry that is closest to current_page
+                -- but still at or before it.
+                local best_page = nil
+                for _, entry in ipairs(toc) do
+                    if self:normalizeChapterName(entry.title) == new_norm then
+                        if entry.page and entry.page <= current_page then
+                            if not best_page or entry.page > best_page then
+                                best_page = entry.page
+                            end
+                        end
+                    end
+                end
+                new_event.page = best_page
+            end
+
             for _, existing_event in ipairs(self.timeline or {}) do
                 local exist_norm = self:normalizeChapterName(existing_event.chapter or "")
                 if new_norm == exist_norm then
-                    found = true
-                    break
+                    -- Check page number for omnibus uniqueness
+                    if not existing_event.page or not new_event.page or existing_event.page == new_event.page then
+                        found = true
+                        break
+                    end
                 end
             end
             if not found then table.insert(self.timeline, new_event) end
         end
 
         -- Sort timeline chronologically based on TOC position
-        local toc = self.ui.document:getToc()
         if toc and #toc > 0 then
             local chapter_order = {}
             for i, entry in ipairs(toc) do
                 local norm = self:normalizeChapterName(entry.title)
-                if not chapter_order[norm] then
-                    chapter_order[norm] = i
+                local id = norm .. "_" .. tostring(entry.page)
+                if not chapter_order[id] then
+                    chapter_order[id] = i
                 end
             end
+            
             table.sort(self.timeline, function(a, b)
-                local order_a = chapter_order[self:normalizeChapterName(a.chapter or "")] or 9999
-                local order_b = chapter_order[self:normalizeChapterName(b.chapter or "")] or 9999
-                return order_a < order_b
+                -- Primary sort key: Page number
+                local a_page = a.page or 0
+                local b_page = b.page or 0
+                if a_page ~= b_page then return a_page < b_page end
+                
+                -- Secondary sort key: TOC index (if pages are missing or identical)
+                local a_norm = self:normalizeChapterName(a.chapter or "")
+                local b_norm = self:normalizeChapterName(b.chapter or "")
+                local a_id = a_norm .. "_" .. tostring(a_page)
+                local b_id = b_norm .. "_" .. tostring(b_page)
+                local a_idx = chapter_order[a_id] or 9999
+                local b_idx = chapter_order[b_id] or 9999
+                return a_idx < b_idx
             end)
         end
     else
@@ -1054,6 +1238,16 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
         self.historical_figures = final_book_data.historical_figures
         self.locations = final_book_data.locations
         self.timeline = final_book_data.timeline
+    end
+
+    -- If we don't have author info in memory, check if the cache already has it
+    -- so a character merge/update doesn't accidentally wipe a previously fetched author bio.
+    if not self.author_info then
+        if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+        local existing = self.cache_manager:loadCache(self.ui.document.file)
+        if existing and existing.author_info then
+            self.author_info = existing.author_info
+        end
     end
 
     local updated_data = {
@@ -1110,6 +1304,12 @@ function XRayPlugin:fetchMoreCharacters()
             reading_percent = 100
         end
         
+        -- Capture the current menu widget NOW, before the async fetch starts.
+        -- self.char_menu may be nilled by close_callback when wait_msg appears on top,
+        -- so we need a local reference to close the old menu reliably at the end.
+        local menu_to_close = self.char_menu
+        self.char_menu = nil
+
         local wait_msg
         local is_cancelled = false
         wait_msg = InfoMessage:new{ text = (self.loc:t("fetching_ai") or "Fetching from %s...") .. "\n\n" .. title .. "\n\nExtracting additional characters...", timeout = 120 }
@@ -1119,8 +1319,47 @@ function XRayPlugin:fetchMoreCharacters()
             if is_cancelled then return end
             if not self.chapter_analyzer then self.chapter_analyzer = require("xray_chapteranalyzer"):new() end
             
-            local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 20000, nil, self.ui:getCurrentPage())
-            local samples, _ = self.chapter_analyzer:getDetailedChapterSamples(self.ui, 200, 150000, reading_percent == 100)
+            -- EVEN SAMPLING: Divide the readable range into equal segments
+            -- and sample one window from each, covering the whole book uniformly
+            local current_page = self.ui:getCurrentPage()
+            local pages_per_sample = 20
+            local chars_per_sample = 10000
+            local num_samples = 6
+            
+            -- Track call count to shift windows on each invocation
+            self.more_chars_call_count = (self.more_chars_call_count or 0) + 1
+            local call_num = self.more_chars_call_count
+            local offset = (call_num - 1) * pages_per_sample
+            self:log("XRayPlugin: More chars call #" .. call_num .. " (offset: " .. offset .. " pages)")
+            
+            -- Divide readable range into equal segments
+            local readable_pages = math.max(1, current_page)
+            local segment_size = math.floor(readable_pages / num_samples)
+            if segment_size < pages_per_sample then segment_size = pages_per_sample end
+            
+            local text_parts = {}
+            for i = 0, num_samples - 1 do
+                local segment_start = i * segment_size
+                local sample_start = math.min(segment_start + offset, readable_pages - pages_per_sample)
+                sample_start = math.max(1, sample_start)
+                
+                -- Wrap around within the segment if the offset pushes past the segment boundary
+                local segment_end = (i + 1) * segment_size
+                if sample_start >= segment_end and i < num_samples - 1 then
+                    sample_start = segment_start + ((offset) % segment_size)
+                    sample_start = math.max(1, math.min(sample_start, readable_pages - pages_per_sample))
+                end
+                
+                if sample_start <= current_page then
+                    local end_page = math.min(sample_start + pages_per_sample, current_page)
+                    local sample = self.chapter_analyzer:getTextFromPageRange(self.ui, sample_start, end_page, chars_per_sample)
+                    if sample and #sample > 100 then
+                        table.insert(text_parts, "[SECTION " .. (i + 1) .. "]\n" .. sample)
+                        self:log("XRayPlugin: More chars sample " .. (i + 1) .. " pages " .. sample_start .. "-" .. end_page .. ": " .. #sample .. " chars")
+                    end
+                end
+            end
+            local book_text = table.concat(text_parts, "\n\n---\n\n")
             
             local exclude_list = {}
             for _, char in ipairs(self.characters or {}) do
@@ -1131,7 +1370,6 @@ function XRayPlugin:fetchMoreCharacters()
                 reading_percent = reading_percent, 
                 filename = self.ui.document.file:match("([^/\\]+)$"), 
                 series = props.series or props.Series, 
-                chapter_samples = samples, 
                 book_text = book_text,
                 exclude_characters = table.concat(exclude_list, ", ")
             }
@@ -1166,7 +1404,14 @@ function XRayPlugin:fetchMoreCharacters()
                 end
             end
             
+            -- Re-sort by frequency based on the newly extracted samples
+            if book_text and #book_text > 0 then
+                self:sortDataByFrequency(self.characters, book_text, "name")
+            end
+            
             -- Save to cache
+            if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+            local existing_cache = self.cache_manager:loadCache(self.ui.document.file) or {}
             local updated_data = {
                 book_title = title,
                 author = author,
@@ -1174,12 +1419,17 @@ function XRayPlugin:fetchMoreCharacters()
                 historical_figures = self.historical_figures,
                 locations = self.locations,
                 timeline = self.timeline,
-                author_info = self.author_info
+                author_info = self.author_info or existing_cache.author_info
             }
-            if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
             self.cache_manager:saveCache(self.ui.document.file, updated_data)
             
             UIManager:show(InfoMessage:new{ text = string.format("Added %d new characters!", new_count), timeout = 3 })
+
+            -- Close the old menu using the captured local reference, which is immune
+            -- to close_callback having nilled self.char_menu during the wait.
+            if menu_to_close then
+                UIManager:close(menu_to_close)
+            end
             self:showCharacters()
         end)
     end)
@@ -1515,7 +1765,7 @@ function XRayPlugin:showCharacterSearch()
     if not self.characters or #self.characters == 0 then UIManager:show(InfoMessage:new{ text = self.loc:t("no_character_data"), timeout = 3 }); return end
     local InputDialog = require("ui/widget/inputdialog")
     local input_dialog
-    input_dialog = InputDialog:new{ title = self.loc:t("search_character_title"), input = "", input_hint = self.loc:t("search_hint"), buttons = {{{ text = self.loc:t("cancel"), callback = function() UIManager:close(input_dialog) end }, { text = self.loc:t("search_button"), is_enter_default = true, callback = function() local search_text = input_dialog:getInputText(); UIManager:close(input_dialog); if search_text and #search_text > 0 then local found_char = self:findCharacterByName(search_text); if found_char then self:showCharacterDetails(found_char) else UIManager:show(InfoMessage:new{ text = string.format(self.loc:t("character_not_found"), search_text), timeout = 3 }) end end end }}} }
+    input_dialog = InputDialog:new{ title = self.loc:t("search_character_title"), input = "", input_hint = self.loc:t("search_hint"), buttons = {{{ text = self.loc:t("cancel"), callback = function() UIManager:close(input_dialog) end }, { text = self.loc:t("search_button"), is_enter_default = true, callback = function() local search_text = input_dialog:getInputText(); UIManager:close(input_dialog); if search_text and #search_text > 0 then local found_char = self:findCharacterByName(search_text); if found_char then self:showCharacterDetails(found_char) else UIManager:show(InfoMessage:new{ text = self.loc:t("character_not_found", search_text), timeout = 3 }) end end end }}} }
     UIManager:show(input_dialog); input_dialog:onShowKeyboard()
 end
 

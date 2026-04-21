@@ -884,3 +884,30 @@ msgstr "Spoiler setting saved: Full Book Mode"
 
 msgid "spoiler_free_about"
 msgstr "Spoiler-free mode limits AI extraction to the pages you have already read (up to your current page), preventing spoilers from future chapters.\n\nFull Book Mode analyzes the entire book, which may contain spoilers."
+
+msgid "search_character"
+msgstr "Search Characters..."
+
+msgid "search_character_title"
+msgstr "Character Search"
+
+msgid "search_hint"
+msgstr "Enter character name"
+
+msgid "search_button"
+msgstr "Search"
+
+msgid "character_not_found"
+msgstr "No character found matching '%s'"
+
+msgid "error_fetch_title"
+msgstr "Fetch Failed"
+
+msgid "error_fetch_desc"
+msgstr "Failed to fetch X-Ray data. Please check your API key and connection."
+
+msgid "error_author_fetch_title"
+msgstr "Author Fetch Failed"
+
+msgid "error_author_fetch_desc"
+msgstr "Failed to fetch author info."

@@ -104,13 +104,18 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
                         { category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_NONE" },
                         { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_NONE" }
                     },
-                    generationConfig = { temperature = 0.2, maxOutputTokens = 8192 }
+                    generationConfig = { temperature = 0.2, maxOutputTokens = 16384 }
                 })
             else
                 local model = ai.model or "gpt-4o-mini"
                 url = config.endpoint or "https://api.openai.com/v1/chat/completions"
                 headers = { ["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. config.api_key }
-                body = json.encode({ model = model, messages = {{ role = "user", content = prompt }}, response_format = { type = "json_object" } })
+                body = json.encode({ 
+                    model = model, 
+                    messages = {{ role = "user", content = prompt }}, 
+                    response_format = { type = "json_object" },
+                    max_tokens = 4096
+                })
             end
             table.insert(requests, { url = url, headers = headers, body = body, provider = ai.provider, model = ai.model })
         end
@@ -167,18 +172,71 @@ function AIHelper:makeRequestAsync(request_params, result_file)
                 self:log("AIHelper Child: Request finished with code " .. tostring(code))
 
                 if code_num == 200 then
-                    -- Success! Write result to file and exit loop
-                    local f = io.open(result_file, "w")
-                    if f then
-                        f:write(tostring(code) .. "\n")
-                        f:write(req.provider .. "\n")
-                        f:write(response_text)
-                        f:close()
-                        self:log("AIHelper Child: Result written to " .. result_file)
-                        success_found = true
-                        break
+                    -- Quick JSON validation before accepting the response
+                    local json_req = require("json")
+                    local valid_json = false
+                    local parse_ok, parsed = pcall(json_req.decode, response_text)
+                    if parse_ok and parsed then
+                        -- Gemini wraps content in candidates[].content.parts[].text
+                        if parsed.candidates and parsed.candidates[1] then
+                            local ai_text = parsed.candidates[1].content and 
+                                parsed.candidates[1].content.parts and 
+                                parsed.candidates[1].content.parts[1] and 
+                                parsed.candidates[1].content.parts[1].text
+                            if ai_text then
+                                local inner_ok, inner = pcall(json_req.decode, ai_text)
+                                valid_json = inner_ok and inner ~= nil
+                                if not valid_json then
+                                    -- Try to find JSON boundaries for truncated responses
+                                    local first_brace = ai_text:find("{", 1, true)
+                                    if first_brace then
+                                        valid_json = true -- Let main thread's fixTruncatedJSON handle it
+                                    end
+                                end
+                            end
+                        -- ChatGPT wraps content in choices[].message.content
+                        elseif parsed.choices and parsed.choices[1] then
+                            local content = parsed.choices[1].message and parsed.choices[1].message.content
+                            if content then
+                                local inner_ok, inner = pcall(json_req.decode, content)
+                                valid_json = inner_ok and inner ~= nil
+                                if not valid_json then
+                                    local first_brace = content:find("{", 1, true)
+                                    if first_brace then
+                                        valid_json = true
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if valid_json then
+                        -- Success! Write result to file and exit loop
+                        local f = io.open(result_file, "w")
+                        if f then
+                            f:write(tostring(code) .. "\n")
+                            f:write(req.provider .. "\n")
+                            f:write(response_text)
+                            f:close()
+                            self:log("AIHelper Child: Result written to " .. result_file)
+                            success_found = true
+                            break
+                        else
+                            self:log("AIHelper Child: Failed to open result file " .. result_file)
+                        end
                     else
-                        self:log("AIHelper Child: Failed to open result file " .. result_file)
+                        self:log(string.format("AIHelper Child: Provider %s returned 200 but JSON is invalid/truncated. Trying fallback.", req.provider))
+                        -- Fall through to try the next provider
+                        if i == #requests then
+                            -- Last provider also failed validation — write it anyway so main thread can attempt repair
+                            local f = io.open(result_file, "w")
+                            if f then
+                                f:write(tostring(code) .. "\n")
+                                f:write(req.provider .. "\n")
+                                f:write(response_text)
+                                f:close()
+                            end
+                        end
                     end
                 else
                     self:log(string.format("AIHelper Child: Provider %s failed with code %s", req.provider, tostring(code)))
@@ -560,14 +618,17 @@ function AIHelper:createPrompt(title, author, context, section_name)
     if context then
         if context.series then enhanced_title = enhanced_title .. " | Series: " .. context.series end
         if context.book_text then extra_context = extra_context .. "\n\nBOOK TEXT CONTEXT:\n" .. context.book_text end
-        if context.chapter_titles and #context.chapter_titles > 0 then
-            local numbered_chapters = {}
-            for i, t in ipairs(context.chapter_titles) do
-                table.insert(numbered_chapters, string.format("%d. %s", i, t))
+        -- Chapter data is only relevant for comprehensive fetches, not "more characters" or author lookups
+        if section_name == "comprehensive_xray" then
+            if context.chapter_titles and #context.chapter_titles > 0 then
+                local numbered_chapters = {}
+                for i, t in ipairs(context.chapter_titles) do
+                    table.insert(numbered_chapters, string.format("%d. %s", i, t))
+                end
+                extra_context = extra_context .. "\n\nLIST OF CHAPTERS (Provide EXACTLY 1 event for EACH, in order):\n[TOTAL CHAPTER COUNT: " .. #context.chapter_titles .. "]\n" .. table.concat(numbered_chapters, "\n")
             end
-            extra_context = extra_context .. "\n\nLIST OF CHAPTERS (Provide EXACTLY 1 event for EACH, in order):\n" .. table.concat(numbered_chapters, "\n")
+            if context.chapter_samples then extra_context = extra_context .. "\n\nCHAPTER SAMPLES:\n" .. context.chapter_samples end
         end
-        if context.chapter_samples then extra_context = extra_context .. "\n\nCHAPTER SAMPLES:\n" .. context.chapter_samples end
         if context.annotations then extra_context = extra_context .. "\n\nUSER HIGHLIGHTS:\n" .. context.annotations end
         -- Merge mode: tell AI what we already know
         local has_merge_data = false
@@ -575,40 +636,57 @@ function AIHelper:createPrompt(title, author, context, section_name)
         
         if context.existing_characters and #context.existing_characters > 0 then
             local existing_lines = {}
+            local sample_text = context.book_text or ""
             for _, c in ipairs(context.existing_characters) do
                 if c.name and c.description then
-                    table.insert(existing_lines, "- " .. c.name .. ": " .. c.description)
+                    -- CONTEXT TRIMMING: Only send full descriptions for characters that appear in the sample
+                    -- Otherwise just send the name to allow the AI to mention them if they appear
+                    if sample_text:find(c.name) then
+                        table.insert(existing_lines, "- " .. c.name .. ": " .. c.description)
+                    else
+                        table.insert(existing_lines, "- " .. c.name)
+                    end
                 end
             end
             if #existing_lines > 0 then
                 if not has_merge_data then extra_context = extra_context .. merge_instructions; has_merge_data = true end
-                extra_context = extra_context .. "\n\nEXISTING CHARACTER KNOWLEDGE:\n" .. table.concat(existing_lines, "\n")
+                extra_context = extra_context .. "\n\nEXISTING CHARACTER KNOWLEDGE (Context Optimized):\n" .. table.concat(existing_lines, "\n")
             end
         end
         
         if context.existing_historical_figures and #context.existing_historical_figures > 0 then
             local existing_lines = {}
+            local sample_text = context.book_text or ""
             for _, h in ipairs(context.existing_historical_figures) do
                 if h.name and h.biography then
-                    table.insert(existing_lines, "- " .. h.name .. ": " .. h.biography)
+                    if sample_text:find(h.name) then
+                        table.insert(existing_lines, "- " .. h.name .. ": " .. h.biography)
+                    else
+                        table.insert(existing_lines, "- " .. h.name)
+                    end
                 end
             end
             if #existing_lines > 0 then
                 if not has_merge_data then extra_context = extra_context .. merge_instructions; has_merge_data = true end
-                extra_context = extra_context .. "\n\nEXISTING HISTORICAL FIGURE KNOWLEDGE:\n" .. table.concat(existing_lines, "\n")
+                extra_context = extra_context .. "\n\nEXISTING HISTORICAL FIGURE KNOWLEDGE (Context Optimized):\n" .. table.concat(existing_lines, "\n")
             end
         end
         
         if context.existing_locations and #context.existing_locations > 0 then
             local existing_lines = {}
+            local sample_text = context.book_text or ""
             for _, l in ipairs(context.existing_locations) do
                 if l.name and l.description then
-                    table.insert(existing_lines, "- " .. l.name .. ": " .. l.description)
+                    if sample_text:find(l.name) then
+                        table.insert(existing_lines, "- " .. l.name .. ": " .. l.description)
+                    else
+                        table.insert(existing_lines, "- " .. l.name)
+                    end
                 end
             end
             if #existing_lines > 0 then
                 if not has_merge_data then extra_context = extra_context .. merge_instructions; has_merge_data = true end
-                extra_context = extra_context .. "\n\nEXISTING LOCATION KNOWLEDGE:\n" .. table.concat(existing_lines, "\n")
+                extra_context = extra_context .. "\n\nEXISTING LOCATION KNOWLEDGE (Context Optimized):\n" .. table.concat(existing_lines, "\n")
             end
         end
     end
@@ -682,7 +760,7 @@ function AIHelper:callGemini(prompt, config, current_model)
     local request_body = json.encode({
         contents = {{ role = "user", parts = {{ text = prompt }} }},
         system_instruction = { parts = {{ text = system_instruction_text }} },
-        generationConfig = { temperature = 0.2, maxOutputTokens = 8192 }
+        generationConfig = { temperature = 0.2, maxOutputTokens = 16384 }
     })
     self:log("AIHelper: Sending Gemini request (" .. #request_body .. " bytes)")
     local ok, code, response_text, status = self:makeRequest(url, { ["Content-Type"] = "application/json", ["x-goog-api-key"] = config.api_key }, request_body)
@@ -730,7 +808,7 @@ function AIHelper:callChatGPT(prompt, config, current_model)
     end
 
     self:log("AIHelper: ChatGPT Prompt prepared")
-    local request_body = json.encode({ model = model, messages = {{ role = "user", content = prompt }}, response_format = { type = "json_object" } })
+    local request_body = json.encode({ model = model, messages = {{ role = "user", content = prompt }}, response_format = { type = "json_object" }, max_tokens = 8192 })
     self:log("AIHelper: Sending ChatGPT request (" .. #request_body .. " bytes)")
     local ok, code, response_text = self:makeRequest(config.endpoint or "https://api.openai.com/v1/chat/completions", { ["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. config.api_key }, request_body)
     

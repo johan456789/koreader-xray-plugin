@@ -220,6 +220,11 @@ function Localization:t(key, ...)
             updater_btn_later = "Later",
             updater_cancelled_update = "Update cancelled.",
             updater_cancelled_check = "Update check cancelled.",
+            search_character = "Search Characters...",
+            search_character_title = "Character Search",
+            search_hint = "Enter character name",
+            search_button = "Search",
+            character_not_found = "No character found matching '%s'",
         }
         translation = fallbacks[key] or key
     end

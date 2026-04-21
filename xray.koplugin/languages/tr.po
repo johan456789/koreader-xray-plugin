@@ -86,3 +86,30 @@ msgstr "Sparse: checks at most every 30 mins"
 
 msgid "menu_auto_update_frequency"
 msgstr "Auto X-Ray Settings"
+
+msgid "search_character"
+msgstr "Karakterleri Ara..."
+
+msgid "search_character_title"
+msgstr "Karakter Araması"
+
+msgid "search_hint"
+msgstr "Karakter adını girin"
+
+msgid "search_button"
+msgstr "Ara"
+
+msgid "character_not_found"
+msgstr "'%s' ile eşleşen karakter bulunamadı"
+
+msgid "error_fetch_title"
+msgstr "Veri Çekme Başarısız"
+
+msgid "error_fetch_desc"
+msgstr "X-Ray verileri alınamadı. Lütfen API anahtarınızı ve bağlantınızı kontrol edin."
+
+msgid "error_author_fetch_title"
+msgstr "Yazar Bilgisi Çekme Başarısız"
+
+msgid "error_author_fetch_desc"
+msgstr "Yazar bilgileri alınamadı."
