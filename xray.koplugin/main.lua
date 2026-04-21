@@ -7,6 +7,7 @@ local Menu = require("ui/widget/menu")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local Trapper = require("ui/trapper")
 local logger = require("logger")
+local XRayLogger = require("xray_logger")
 local _ = require("gettext")
 local Screen = require("device").screen
 
@@ -35,6 +36,8 @@ function XRayPlugin:init()
     local Localization = require("localization_xray")
     self.loc = Localization
     self.loc:init(self.path)
+
+    XRayLogger:init(self.path)
     
     local AIHelper = require("xray_aihelper")
     self.ai_helper = AIHelper
@@ -106,9 +109,7 @@ function XRayPlugin:onDictButtonsReady(dict_popup, dict_buttons)
 end
 
 function XRayPlugin:log(msg)
-    if self.ai_helper and self.ai_helper.log then
-        self.ai_helper:log(msg)
-    end
+    XRayLogger:log(msg)
 end
 
 function XRayPlugin:onReaderReady()
@@ -165,9 +166,10 @@ function XRayPlugin:onPageUpdate(pageno)
     local is_populated = false
     local norm_title = self:normalizeChapterName(chapter_title)
     for _, ev in ipairs(self.timeline or {}) do
-        -- For omnibus support, we check both name and page number
+        -- Duplicate = same chapter name AND same page number.
+        -- If either page is nil, treat as distinct (prevents omnibus chapter collapse).
         if self:normalizeChapterName(ev.chapter or "") == norm_title then
-            if not ev.page or ev.page == chapter_page then
+            if ev.page and chapter_page and ev.page == chapter_page then
                 is_populated = true
                 break
             end
@@ -310,20 +312,14 @@ function XRayPlugin:autoLoadCache()
     
     if cached_data then
         self:log("XRayPlugin: Cache loaded successfully")
+        -- Set raw data immediately so the reader can render first.
+        -- Pages were already assigned at fetch time and stored in the cache,
+        -- so the data is usable as-is; we just need to sort/dedup.
         self.book_data = cached_data
         self.characters = cached_data.characters or {}
         self.locations = cached_data.locations or {}
         self.timeline = cached_data.timeline or {}
         self.historical_figures = cached_data.historical_figures or {}
-        -- Fast restore of sort order using the persisted sort_order field.
-        -- Falls back to original list order for items without a sort_order (old cache).
-        local function restoreOrder(list)
-            table.sort(list, function(a, b)
-                return (a.sort_order or 9999) < (b.sort_order or 9999)
-            end)
-        end
-        restoreOrder(self.characters)
-        restoreOrder(self.historical_figures)
         if cached_data.author_info then
             self.author_info = cached_data.author_info
         else
@@ -335,6 +331,35 @@ function XRayPlugin:autoLoadCache()
             }
         end
         if #self.characters > 0 then self.xray_mode_enabled = true end
+
+        -- Defer the expensive sort/dedup/page-assignment to the next scheduler
+        -- tick so the reader can render the book page before we process.
+        -- NOTE: allow_findtext is intentionally false here — pages are already
+        -- stored in the cache; document:findText() must never block the main
+        -- thread at open time (it freezes the Kindle for many seconds on
+        -- omnibus books).
+        UIManager:scheduleIn(0, function()
+            if not self.ui or not self.ui.document then return end
+            self:log("XRayPlugin: Running deferred post-load processing")
+            -- Fast restore of sort order using the persisted sort_order field.
+            local function restoreOrder(list)
+                table.sort(list, function(a, b)
+                    return (a.sort_order or 9999) < (b.sort_order or 9999)
+                end)
+            end
+            restoreOrder(self.characters)
+            restoreOrder(self.historical_figures)
+            -- Repair missing page numbers from old caches (Strategies 1-5 only,
+            -- no document text search).
+            local toc = self.ui.document:getToc()
+            self:assignTimelinePages(self.timeline, toc, false)
+            self:sortTimelineByTOC(self.timeline)
+            -- Repair any duplicates that may have accumulated in previous sessions
+            self.characters = self:deduplicateByName(self.characters, "name")
+            self.historical_figures = self:deduplicateByName(self.historical_figures, "name")
+            self.locations = self:deduplicateByName(self.locations, "name")
+            self:log("XRayPlugin: Deferred post-load processing complete")
+        end)
     else
         self:log("XRayPlugin: No cache found or failed to load")
     end
@@ -395,11 +420,6 @@ function XRayPlugin:getSubMenuItems()
             text = self.loc:t("menu_update_xray") or "Update X-Ray Data (Merge)",
             keep_menu_open = true,
             callback = function() self:updateFromAI() end,
-        },
-        {
-            text = self.loc:t("menu_fetch_author") or "Fetch Author Info (AI)",
-            keep_menu_open = true,
-            callback = function() self:fetchAuthorInfo() end,
             separator = true,
         },
         {
@@ -472,20 +492,24 @@ function XRayPlugin:getSubMenuItems()
                     callback = function() self:clearCache() end,
                 },
                 {
+                    text = self.loc:t("menu_clear_logs") or "Clear Logs",
+                    keep_menu_open = true,
+                    callback = function() self:clearLogs() end,
+                },
+                {
                     text = self.loc:t("updater_check") or "Check for Updates",
                     keep_menu_open = true,
                     callback = function()
                         local updater = require("xray_updater")
                         updater.checkForUpdates(self.loc)
                     end,
-                    separator = true,
                 },
-                {
-                    text = self.loc:t("menu_about"),
-                    keep_menu_open = true,
-                    callback = function() self:showAbout() end,
-                }
             }
+        },
+        {
+            text = self.loc:t("menu_about"),
+            keep_menu_open = true,
+            callback = function() self:showAbout() end,
         },
     }
     
@@ -573,6 +597,26 @@ function XRayPlugin:sortDataByFrequency(list, text, key)
     end
     return list
 end
+
+-- Remove duplicate entries by name (case-insensitive exact match).
+-- Keeps the first occurrence so that sort_order is preserved.
+function XRayPlugin:deduplicateByName(list, key)
+    key = key or "name"
+    if not list or #list == 0 then return list end
+    local seen = {}
+    local deduped = {}
+    for _, item in ipairs(list) do
+        local k = (item[key] or ""):lower()
+        if k ~= "" and not seen[k] then
+            seen[k] = true
+            table.insert(deduped, item)
+        elseif k == "" then
+            table.insert(deduped, item) -- keep unnamed entries as-is
+        end
+    end
+    return deduped
+end
+
 
 function XRayPlugin:showLanguageSelection()
     local ButtonDialog = require("ui/widget/buttondialog")
@@ -903,6 +947,149 @@ function XRayPlugin:isNonNarrativeChapter(title)
     return false
 end
 
+-- Assign TOC page numbers to timeline events.
+-- For omnibus books, the same chapter name/number can appear multiple times at different pages.
+-- We use ordered queues per key so the Nth AI "Chapter 1" maps to the Nth TOC "Chapter 1".
+--
+-- allow_findtext: when true, Strategy 6 (document:findText) is used as a last resort
+--   for events that could not be matched via TOC. This is a blocking operation and must
+--   NEVER be called at cache-load time (causes a multi-second freeze on old Kindles).
+--   Pass true only when processing freshly-fetched AI data (finalizeXRayData).
+function XRayPlugin:assignTimelinePages(timeline, toc, allow_findtext)
+    if not toc or not timeline or #timeline == 0 then return end
+
+    -- Build ORDERED QUEUES (not single-value maps) for each match strategy.
+    -- key → list of pages in TOC order, so the Nth event with that key gets the Nth page.
+    local q_norm   = {}  -- normalized title → {page, page, ...}
+    local q_number = {}  -- leading digit    → {page, page, ...}
+    local q_suffix = {}  -- title-after-num  → {page, page, ...}
+    local all_toc  = {}  -- flat list {norm, page, used} for substring fallback
+
+    local function push(t, key, val)
+        if not t[key] then t[key] = { list = {}, idx = 0 } end
+        table.insert(t[key].list, val)
+    end
+
+    for _, entry in ipairs(toc) do
+        if entry.page and entry.title then
+            local p = tonumber(entry.page)
+            if p then
+                local norm = self:normalizeChapterName(entry.title)
+                push(q_norm, norm, p)
+
+                local num = norm:match("^(%d+)")
+                if num then push(q_number, num, p) end
+
+                local suffix = norm:match("^%d+[%s%.%:%-]+(.+)$")
+                if suffix and suffix ~= "" then push(q_suffix, suffix, p) end
+
+                table.insert(all_toc, { norm = norm, page = p, used = false })
+            end
+        end
+    end
+
+    -- Pop the next unused page for a key (consumes in order)
+    local function pop(q, key)
+        local bucket = q[key]
+        if not bucket then return nil end
+        bucket.idx = bucket.idx + 1
+        return bucket.list[bucket.idx]
+    end
+
+    for _, ev in ipairs(timeline) do
+        local norm = self:normalizeChapterName(ev.chapter or "")
+        local page = nil
+
+        -- Strategy 1: Exact normalized title (queue-based)
+        if q_norm[norm] then
+            page = pop(q_norm, norm)
+        end
+
+        -- Strategy 2: Leading number (queue-based)
+        if not page then
+            local num = norm:match("^(%d+)")
+            if num and q_number[num] then
+                page = pop(q_number, num)
+            end
+        end
+
+        -- Strategy 3: AI suffix vs TOC suffix or norm (queue-based)
+        if not page then
+            local ai_suffix = norm:match("^%d+[%s%.%:%-]+(.+)$")
+            if ai_suffix then
+                if q_suffix[ai_suffix] then
+                    page = pop(q_suffix, ai_suffix)
+                elseif q_norm[ai_suffix] then
+                    page = pop(q_norm, ai_suffix)
+                end
+            end
+        end
+
+        -- Strategy 4: AI title as suffix (queue-based)
+        if not page and q_suffix[norm] then
+            page = pop(q_suffix, norm)
+        end
+
+        -- Strategy 5: Substring match (linear scan, consume each TOC entry once)
+        if not page and #norm > 2 then
+            for _, t in ipairs(all_toc) do
+                if not t.used then
+                    if t.norm:find(norm, 1, true) or norm:find(t.norm, 1, true) then
+                        page = t.page
+                        t.used = true
+                        break
+                    end
+                end
+            end
+        end
+
+        -- Strategy 6: NO-TOC FALLBACK - search document text for the chapter heading.
+        -- Gated behind allow_findtext because document:findText() is a blocking call that
+        -- can freeze the UI for many seconds on large books / old hardware.
+        if allow_findtext and not page and self.ui and self.ui.document and self.ui.document.findText then
+            if #norm > 3 and not norm:match("^section") then
+                local success, results = pcall(function()
+                    return self.ui.document:findText(ev.chapter or "", 20)
+                end)
+                if success and results and #results > 0 then
+                    page = results[1].page
+                end
+            end
+        end
+
+        if page then
+            ev.page = tonumber(page)
+        end
+    end
+end
+
+-- Sort a timeline table chronologically by the page number stored on each event.
+-- Pages are assigned from the TOC at fetch time and persisted in the cache,
+-- so no TOC re-lookup is needed here. Events without a page sort to the end.
+function XRayPlugin:sortTimelineByTOC(timeline)
+    if not timeline or #timeline == 0 then return end
+    
+    -- Store original index for a stable sort (prevents shuffling events on the same page)
+    for i, ev in ipairs(timeline) do ev._sort_idx = i end
+    
+    table.sort(timeline, function(a, b)
+        -- Primary key: Page number (must be numeric)
+        local ap = tonumber(a.page) or 999999
+        local bp = tonumber(b.page) or 999999
+        
+        if ap ~= bp then
+            return ap < bp
+        end
+        
+        -- Secondary key: Original AI response order (stability)
+        -- NOTHING about the chapter title is used for sorting here.
+        return (a._sort_idx or 0) < (b._sort_idx or 0)
+    end)
+    
+    -- Clean up temporary index
+    for _, ev in ipairs(timeline) do ev._sort_idx = nil end
+end
+
 local function sanitizeMetadata(val)
     if type(val) == "string" then return val
     elseif type(val) == "table" then return table.concat(val, ", ")
@@ -934,7 +1121,7 @@ function XRayPlugin:continueWithFetch(reading_percent, is_update, last_fetch_pag
         if is_cancelled then return end
         if not self.chapter_analyzer then self.chapter_analyzer = require("xray_chapteranalyzer"):new() end
 
-        -- 1. Extraction (Main Thread)
+        -- 1a. Lightweight prep: resolve current page and find first missing page
         local current_page = self.ui:getCurrentPage()
         
         -- Find the earliest missing narrative chapter to ensure we recover it (Repair logic)
@@ -977,6 +1164,7 @@ function XRayPlugin:continueWithFetch(reading_percent, is_update, last_fetch_pag
             end
         end
 
+        -- 1b. First heavy extraction: recent book text (for context / frequency scoring)
         local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 20000, nil, current_page, first_missing_page)
         
         -- Build set of already-known chapters for smart sampling
@@ -989,70 +1177,80 @@ function XRayPlugin:continueWithFetch(reading_percent, is_update, last_fetch_pag
             end
         end
         
-        local samples, chapter_titles = self.chapter_analyzer:getDetailedChapterSamples(self.ui, 200, 150000, reading_percent == 100, first_missing_page, known_chapters)
-        local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui)
+        -- Yield to the UI between the two heavy extraction calls.
+        -- getDetailedChapterSamples iterates every TOC chapter (200+ on an omnibus)
+        -- and calls getTextFromXPointer per chapter, which can take several seconds.
+        -- Yielding here keeps the reader responsive (page turns, etc.).
+        UIManager:scheduleIn(0, function()
+            if is_cancelled then return end
+            if not self.ui or not self.ui.document then return end
+
+            -- 1c. Second heavy extraction: per-chapter samples for AI prompt
+            local samples, chapter_titles = self.chapter_analyzer:getDetailedChapterSamples(self.ui, 200, 150000, reading_percent == 100, first_missing_page, known_chapters)
+            local annots = self.chapter_analyzer:getAnnotationsForAnalysis(self.ui)
         
-        if (not book_text or #book_text < 10) and not samples then
-            if wait_msg then UIManager:close(wait_msg) end
-            if not is_silent then
-                UIManager:show(InfoMessage:new{ text = "Error: Could not extract book text.", timeout = 5 })
-            end
-            self:log("XRayPlugin: Text extraction failed" .. (is_silent and " (silent)" or ""))
-            return
-        end
-        
-        local context = { 
-            reading_percent = reading_percent, 
-            spoiler_free = reading_percent < 100, 
-            filename = self.ui.document.file:match("([^/\\]+)$"), 
-            series = props.series or props.Series, 
-            chapter_samples = samples, 
-            chapter_titles = chapter_titles,
-            annotations = annots, 
-            book_text = book_text,
-            -- For merge fetches, pass existing data so AI only returns new information
-            existing_characters = is_update and self.characters or nil,
-            existing_locations = is_update and self.locations or nil,
-            existing_historical_figures = is_update and self.historical_figures or nil,
-        }
-        
-        -- 2. AI Request
-        if is_silent then
-            local req_params, err_code, err_msg = self.ai_helper:buildComprehensiveRequest(title, author, context)
-            if not req_params then
-                self:log("XRayPlugin: Failed to build async request: " .. tostring(err_msg))
-                self.bg_fetch_active = false
+            if (not book_text or #book_text < 10) and not samples then
+                if wait_msg then UIManager:close(wait_msg) end
+                if not is_silent then
+                    UIManager:show(InfoMessage:new{ text = "Error: Could not extract book text.", timeout = 5 })
+                end
+                self:log("XRayPlugin: Text extraction failed" .. (is_silent and " (silent)" or ""))
                 return
             end
+        
+            local context = { 
+                reading_percent = reading_percent, 
+                spoiler_free = reading_percent < 100, 
+                filename = self.ui.document.file:match("([^/\\]+)$"), 
+                series = props.series or props.Series, 
+                chapter_samples = samples, 
+                chapter_titles = chapter_titles,
+                annotations = annots, 
+                book_text = book_text,
+                -- For merge fetches, pass existing data so AI only returns new information
+                existing_characters = is_update and self.characters or nil,
+                existing_locations = is_update and self.locations or nil,
+                existing_historical_figures = is_update and self.historical_figures or nil,
+            }
             
-            local DataStorage = require("datastorage")
-            local result_file = DataStorage:getSettingsDir() .. "/xray/bg_fetch_" .. tostring(os.time()) .. ".json"
-            local started = self.ai_helper:makeRequestAsync(req_params, result_file)
-            if started then
-                self:pollBackgroundFetch(result_file, title, author, book_text, is_update, current_page)
-            else
-                self.bg_fetch_active = false
-                self:log("XRayPlugin: Failed to start async background fetch")
+            -- 2. AI Request
+            if is_silent then
+                local req_params, err_code, err_msg = self.ai_helper:buildComprehensiveRequest(title, author, context)
+                if not req_params then
+                    self:log("XRayPlugin: Failed to build async request: " .. tostring(err_msg))
+                    self.bg_fetch_active = false
+                    return
+                end
+                
+                local DataStorage = require("datastorage")
+                local result_file = DataStorage:getSettingsDir() .. "/xray/bg_fetch_" .. tostring(os.time()) .. ".json"
+                local started = self.ai_helper:makeRequestAsync(req_params, result_file)
+                if started then
+                    self:pollBackgroundFetch(result_file, title, author, book_text, is_update, current_page)
+                else
+                    self.bg_fetch_active = false
+                    self:log("XRayPlugin: Failed to start async background fetch")
+                end
+                return
             end
-            return
-        end
 
-        self.ai_helper:setTrapWidget(wait_msg)
-        local final_book_data, error_code, error_msg = self.ai_helper:getBookDataComprehensive(title, author, nil, context)
-        self.ai_helper:resetTrapWidget()
+            self.ai_helper:setTrapWidget(wait_msg)
+            local final_book_data, error_code, error_msg = self.ai_helper:getBookDataComprehensive(title, author, nil, context)
+            self.ai_helper:resetTrapWidget()
 
-        if wait_msg then UIManager:close(wait_msg) end
-        if is_cancelled or error_code == "USER_CANCELLED" then return end
+            if wait_msg then UIManager:close(wait_msg) end
+            if is_cancelled or error_code == "USER_CANCELLED" then return end
 
-        if not final_book_data then
-            local error_dialog
-            local ButtonDialog = require("ui/widget/buttondialog")
-            error_dialog = ButtonDialog:new{ title = self.loc:t("error_fetch_title") or "Fetch Failed", text = error_msg or self.loc:t("error_fetch_desc") or "Failed to fetch data.", buttons = {{{ text = self.loc:t("ok"), callback = function() UIManager:close(error_dialog) end }}} }
-            UIManager:show(error_dialog)
-            return
-        end
+            if not final_book_data then
+                local error_dialog
+                local ButtonDialog = require("ui/widget/buttondialog")
+                error_dialog = ButtonDialog:new{ title = self.loc:t("error_fetch_title") or "Fetch Failed", text = error_msg or self.loc:t("error_fetch_desc") or "Failed to fetch data.", buttons = {{{ text = self.loc:t("ok"), callback = function() UIManager:close(error_dialog) end }}} }
+                UIManager:show(error_dialog)
+                return
+            end
 
-        self:finalizeXRayData(final_book_data, title, author, book_text, is_update, false, current_page)
+            self:finalizeXRayData(final_book_data, title, author, book_text, is_update, false, current_page)
+        end) -- end scheduleIn(0) yield
     end)
 end
 
@@ -1137,7 +1335,8 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
             end
             if not found then table.insert(self.characters, new_char) end
         end
-        -- Re-sort the entire character list by frequency in the current context
+        -- Dedup then re-sort the entire character list by frequency in the current context
+        self.characters = self:deduplicateByName(self.characters, "name")
         if book_text and #book_text > 0 then
             self:sortDataByFrequency(self.characters, book_text, "name")
         end
@@ -1156,6 +1355,7 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
             end
             if not found then table.insert(self.historical_figures, new_fig) end
         end
+        self.historical_figures = self:deduplicateByName(self.historical_figures, "name")
         -- Merge locations
         for _, new_loc in ipairs(final_book_data.locations or {}) do
             local found = false
@@ -1170,34 +1370,22 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
             end
             if not found then table.insert(self.locations, new_loc) end
         end
-        -- Merge timeline (append only if chapter+page not found)
+        self.locations = self:deduplicateByName(self.locations, "name")
+        -- Merge timeline: duplicate = same chapter name AND same page.
+        -- If either event has no page yet, treat as distinct to preserve omnibus chapters.
         local toc = self.ui.document:getToc()
+        -- Assign TOC pages to incoming events before dedup check.
+        -- allow_findtext=true: this is freshly-fetched AI data so document search is OK.
+        self:assignTimelinePages(final_book_data.timeline or {}, toc, true)
         for _, new_event in ipairs(final_book_data.timeline or {}) do
             local found = false
             local new_norm = self:normalizeChapterName(new_event.chapter or "")
-            
-            -- Assign page number to new event if it doesn't have one
-            if not new_event.page and toc then
-                -- OMNIBUS OPTIMIZATION: Pick the TOC entry that is closest to current_page
-                -- but still at or before it.
-                local best_page = nil
-                for _, entry in ipairs(toc) do
-                    if self:normalizeChapterName(entry.title) == new_norm then
-                        if entry.page and entry.page <= current_page then
-                            if not best_page or entry.page > best_page then
-                                best_page = entry.page
-                            end
-                        end
-                    end
-                end
-                new_event.page = best_page
-            end
-
             for _, existing_event in ipairs(self.timeline or {}) do
                 local exist_norm = self:normalizeChapterName(existing_event.chapter or "")
                 if new_norm == exist_norm then
-                    -- Check page number for omnibus uniqueness
-                    if not existing_event.page or not new_event.page or existing_event.page == new_event.page then
+                    -- Both pages must be present and equal to count as a duplicate
+                    if new_event.page and existing_event.page and
+                       tonumber(new_event.page) == tonumber(existing_event.page) then
                         found = true
                         break
                     end
@@ -1205,39 +1393,19 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
             end
             if not found then table.insert(self.timeline, new_event) end
         end
-
-        -- Sort timeline chronologically based on TOC position
-        if toc and #toc > 0 then
-            local chapter_order = {}
-            for i, entry in ipairs(toc) do
-                local norm = self:normalizeChapterName(entry.title)
-                local id = norm .. "_" .. tostring(entry.page)
-                if not chapter_order[id] then
-                    chapter_order[id] = i
-                end
-            end
-            
-            table.sort(self.timeline, function(a, b)
-                -- Primary sort key: Page number
-                local a_page = a.page or 0
-                local b_page = b.page or 0
-                if a_page ~= b_page then return a_page < b_page end
-                
-                -- Secondary sort key: TOC index (if pages are missing or identical)
-                local a_norm = self:normalizeChapterName(a.chapter or "")
-                local b_norm = self:normalizeChapterName(b.chapter or "")
-                local a_id = a_norm .. "_" .. tostring(a_page)
-                local b_id = b_norm .. "_" .. tostring(b_page)
-                local a_idx = chapter_order[a_id] or 9999
-                local b_idx = chapter_order[b_id] or 9999
-                return a_idx < b_idx
-            end)
-        end
+        -- Sort the merged timeline chronologically
+        self:sortTimelineByTOC(self.timeline)
     else
         self.characters = final_book_data.characters
         self.historical_figures = final_book_data.historical_figures
         self.locations = final_book_data.locations
         self.timeline = final_book_data.timeline
+        -- Assign TOC pages and sort — must run for initial fetches too,
+        -- since the AI returns chapters in arbitrary order.
+        -- allow_findtext=true: this is freshly-fetched AI data so document search is OK.
+        local toc = self.ui.document:getToc()
+        self:assignTimelinePages(self.timeline or {}, toc, true)
+        self:sortTimelineByTOC(self.timeline)
     end
 
     -- If we don't have author info in memory, check if the cache already has it
@@ -1530,7 +1698,22 @@ end
 
 function XRayPlugin:showAbout()
     local meta = dofile(self.path .. "/_meta.lua")
-    UIManager:show(InfoMessage:new{ text = (meta.fullname or "X-Ray") .. " v" .. (meta.version or "?.?.?") .. "\n\n" .. (meta.description or ""), timeout = 15 })
+    local ConfirmBox = require("ui/widget/confirmbox")
+    local version = meta.version or "?.?.?"
+    local description = tostring(meta.description or "")
+
+    local body = (meta.fullname or "X-Ray") .. " v" .. version .. "\n\n" .. description
+
+    UIManager:show(ConfirmBox:new{
+        text = body,
+        icon = "lightbulb",
+        ok_text = self.loc:t("updater_check") or "Check for Updates",
+        cancel_text = self.loc:t("close") or "Close",
+        ok_callback = function()
+            local updater = require("xray_updater")
+            updater.checkForUpdates(self.loc)
+        end,
+    })
 end
 
 function XRayPlugin:clearCache()
@@ -1538,6 +1721,11 @@ function XRayPlugin:clearCache()
     self.cache_manager:clearCache(self.ui.document.file)
     self.characters = {}; self.locations = {}; self.timeline = {}; self.historical_figures = {}; self.author_info = nil
     UIManager:show(InfoMessage:new{ text = self.loc:t("cache_cleared"), timeout = 3 })
+end
+
+function XRayPlugin:clearLogs()
+    XRayLogger:clear()
+    UIManager:show(InfoMessage:new{ text = self.loc:t("logs_cleared") or "Logs cleared!", timeout = 3 })
 end
 
 function XRayPlugin:toggleXRayMode()
@@ -1597,6 +1785,12 @@ end
 
 function XRayPlugin:showTimeline()
     if not self.timeline or #self.timeline == 0 then UIManager:show(InfoMessage:new{ text = self.loc:t("no_timeline_data"), timeout = 3 }); return end
+    -- Sort by the page number stamped at fetch time (persisted in cache).
+    -- allow_findtext=true: this is user-initiated so a brief document search is acceptable;
+    -- it also repairs any legacy cached events that are still missing a page number.
+    local toc = self.ui.document:getToc()
+    self:assignTimelinePages(self.timeline, toc, true)
+    self:sortTimelineByTOC(self.timeline)
     local items = {}
     for _, ev in ipairs(self.timeline) do table.insert(items, { text = (ev.chapter or "") .. ": " .. (ev.event or ""), callback = function() UIManager:show(InfoMessage:new{ text = (ev.event or ""), timeout = 10 }) end }) end
     UIManager:show(Menu:new{ title = self.loc:t("menu_timeline"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })

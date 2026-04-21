@@ -5,6 +5,7 @@ local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local logger = require("logger")
+local XRayLogger = require("xray_logger")
 local Trapper = require("ui/trapper")
 
 -- Optimization: Use rapidjson if available
@@ -34,13 +35,7 @@ local AIHelper = {
 
 -- Custom logger for X-Ray
 function AIHelper:log(message)
-    if not self.path then return end
-    local log_path = self.path .. "/xray.log"
-    local f = io.open(log_path, "a")
-    if f then
-        f:write(os.date("%Y-%m-%d %H:%M:%S") .. " " .. tostring(message) .. "\n")
-        f:close()
-    end
+    XRayLogger:log(message)
 end
 
 function AIHelper:setTrapWidget(trap_widget) self.trap_widget = trap_widget end
@@ -408,12 +403,6 @@ end
 
 function AIHelper:init(path)
     self.path = path or "plugins/xray.koplugin"
-    local f = io.open(self.path .. "/xray.log", "a")
-    if f then
-        f:write("\n" .. string.rep("=", 40) .. "\n")
-        f:write("--- X-Ray Session Started: " .. os.date("%Y-%m-%d %H:%M:%S") .. " ---\n")
-        f:close()
-    end
     self:loadConfig(); self:loadSettings()
     self:log("AIHelper initialized")
 end

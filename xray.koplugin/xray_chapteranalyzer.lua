@@ -604,47 +604,53 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
     -- Filter chapters
     local active_chapters = {}
     local chapter_titles = {}
-    for i, chapter in ipairs(toc) do
-        if not is_full_book and current_page and chapter.page and chapter.page > current_page then
-            break
-        end
-        
-        -- Skip non-narrative chapters
-        if isNonNarrative(chapter.title) then
-            AIHelper:log("ChapterAnalyzer: Skipping non-narrative chapter: " .. (chapter.title or tostring(i)))
-        else
-            local skip = false
-            if start_page and not is_full_book then
-                local next_chapter_page = toc[i+1] and toc[i+1].page or math.huge
-                if next_chapter_page <= start_page then
-                    -- ONLY skip if it's already in our data
-                    if known_chapters then
-                        local norm_title = normalize(chapter.title)
-                        if known_chapters[norm_title] then
-                            skip = true
-                        end
-                    else
-                        -- Fallback to old behavior if no list provided
-                        skip = true
-                    end
-                end
+    if toc and #toc > 0 then
+        for i, chapter in ipairs(toc) do
+            if not is_full_book and current_page and chapter.page and chapter.page > current_page then
+                break
             end
             
-            if not skip then
-                if #active_chapters >= max_chapters then break end
-                table.insert(active_chapters, chapter)
-                table.insert(chapter_titles, chapter.title or tostring(i))
+            -- Skip non-narrative chapters
+            if isNonNarrative(chapter.title) then
+                AIHelper:log("ChapterAnalyzer: Skipping non-narrative chapter: " .. (chapter.title or tostring(i)))
             else
-                AIHelper:log("ChapterAnalyzer: Skipping already-fetched chapter: " .. (chapter.title or tostring(i)))
+                local skip = false
+                if start_page and not is_full_book then
+                    local next_chapter_page = toc[i+1] and toc[i+1].page or math.huge
+                    if next_chapter_page <= start_page then
+                        -- ONLY skip if it's already in our data
+                        if known_chapters then
+                            local norm_title = normalize(chapter.title)
+                            if known_chapters[norm_title] then
+                                skip = true
+                            end
+                        else
+                            -- Fallback to old behavior if no list provided
+                            skip = true
+                        end
+                    end
+                end
+                
+                if not skip then
+                    if #active_chapters >= max_chapters then break end
+                    table.insert(active_chapters, chapter)
+                    table.insert(chapter_titles, chapter.title or tostring(i))
+                else
+                    AIHelper:log("ChapterAnalyzer: Skipping already-fetched chapter: " .. (chapter.title or tostring(i)))
+                end
             end
         end
     end
     
-    if #active_chapters == 0 then return nil, nil end
+    -- If no chapters found in TOC, we don't exit; we'll fallback to even sampling later.
+    -- However, we still need a count for budget calculations.
+    local num_chapters = #active_chapters
+    if num_chapters == 0 then
+        num_chapters = 20 -- Default budget for even sampling
+    end
     
     -- DYNAMIC BUDGET: Scale down for large books to leave room for AI output
-    local num_chapters = #active_chapters
-    if num_chapters > 60 then
+    if #active_chapters > 60 then
         -- Very large omnibus: aggressive compression
         total_limit = math.min(total_limit, 60000)
         AIHelper:log("ChapterAnalyzer: Large book detected (" .. num_chapters .. " chapters). Compressed total_limit to " .. total_limit)
@@ -669,29 +675,57 @@ function ChapterAnalyzer:getDetailedChapterSamples(ui, max_chapters, total_limit
     local sample_len = math.floor(per_chapter_budget / 3)
     local samples = {}
     
-    logger.info("ChapterAnalyzer: Detailed sampling for", #active_chapters, "chapters. Budget per chapter:", per_chapter_budget)
-    AIHelper:log("ChapterAnalyzer: Sampling " .. #active_chapters .. " chapters with " .. per_chapter_budget .. " chars each.")
-    
-    for i, chapter in ipairs(active_chapters) do
-        local success, chapter_text = pcall(function()
-            if ui.document.getTextFromXPointer and chapter.xpointer then
-                -- EPUB: Usually returns the full text of the chapter file
-                return ui.document:getTextFromXPointer(chapter.xpointer)
-            end
-            return ""
-        end)
+    if #active_chapters > 0 then
+        logger.info("ChapterAnalyzer: Detailed sampling for", #active_chapters, "chapters. Budget per chapter:", per_chapter_budget)
+        AIHelper:log("ChapterAnalyzer: Sampling " .. #active_chapters .. " chapters with " .. per_chapter_budget .. " chars each.")
         
-        if success and chapter_text and #chapter_text > 100 then
-            local start_txt = chapter_text:sub(1, sample_len)
-            local mid_start = math.max(1, math.floor(#chapter_text / 2) - math.floor(sample_len / 2))
-            local mid_txt = chapter_text:sub(mid_start, mid_start + sample_len)
-            local end_txt = chapter_text:sub(-sample_len)
+        for i, chapter in ipairs(active_chapters) do
+            local success, chapter_text = pcall(function()
+                if ui.document.getTextFromXPointer and chapter.xpointer then
+                    -- EPUB: Usually returns the full text of the chapter file
+                    return ui.document:getTextFromXPointer(chapter.xpointer)
+                end
+                return ""
+            end)
             
-            table.insert(samples, string.format(
-                "CHAPTER [%s]:\n[START]: %s\n[MID]: %s\n[END]: %s",
-                chapter.title or tostring(i),
-                start_txt, mid_txt, end_txt
-            ))
+            if success and chapter_text and #chapter_text > 100 then
+                local start_txt = chapter_text:sub(1, sample_len)
+                local mid_start = math.max(1, math.floor(#chapter_text / 2) - math.floor(sample_len / 2))
+                local mid_txt = chapter_text:sub(mid_start, mid_start + sample_len)
+                local end_txt = chapter_text:sub(-sample_len)
+                
+                table.insert(samples, string.format(
+                    "CHAPTER [%s]:\n[START]: %s\n[MID]: %s\n[END]: %s",
+                    chapter.title or tostring(i),
+                    start_txt, mid_txt, end_txt
+                ))
+            end
+        end
+    else
+        -- NO TOC FALLBACK: Even sampling across the book
+        local page_count = ui.document:getPageCount()
+        if page_count and page_count > 0 then
+            local num_sections = math.min(20, page_count)
+            local step = math.floor(page_count / num_sections)
+            AIHelper:log("ChapterAnalyzer: No TOC found. Using even sampling across " .. num_sections .. " sections.")
+            
+            for i = 1, num_sections do
+                local p = (i - 1) * step + 1
+                local success, section_text = pcall(function()
+                    if ui.document.getPageText then
+                        return ui.document:getPageText(p)
+                    end
+                    return ""
+                end)
+                
+                if success and section_text and #section_text > 100 then
+                    table.insert(samples, string.format(
+                        "SECTION [%d] (Near Page %d):\n%s",
+                        i, p, section_text:sub(1, per_chapter_budget)
+                    ))
+                    table.insert(chapter_titles, "Section " .. i)
+                end
+            end
         end
     end
     

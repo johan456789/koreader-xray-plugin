@@ -113,3 +113,9 @@ msgstr "Yazar Bilgisi Çekme Başarısız"
 
 msgid "error_author_fetch_desc"
 msgstr "Yazar bilgileri alınamadı."
+
+msgid "menu_clear_logs"
+msgstr "Günlükleri Temizle"
+
+msgid "logs_cleared"
+msgstr "Günlükler temizlendi!"

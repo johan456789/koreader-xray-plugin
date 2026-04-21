@@ -62,6 +62,12 @@ msgstr "AI Settings"
 msgid "menu_clear_cache"
 msgstr "Clear Cache"
 
+msgid "menu_clear_logs"
+msgstr "Clear Logs"
+
+msgid "logs_cleared"
+msgstr "Logs cleared!"
+
 msgid "menu_xray_mode"
 msgstr "X-Ray Mode Settings"
 
