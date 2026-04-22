@@ -906,6 +906,10 @@ msgstr "Search"
 msgid "character_not_found"
 msgstr "No character found matching '%s'"
 
+msgid "multiple_matches"
+msgstr "Multiple matches for '%s'. Which did you mean?"
+
+
 msgid "error_fetch_title"
 msgstr "Fetch Failed"
 

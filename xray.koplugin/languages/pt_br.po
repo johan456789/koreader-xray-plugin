@@ -99,6 +99,10 @@ msgstr "Pesquisar"
 msgid "character_not_found"
 msgstr "Nenhum personagem encontrado correspondente a '%s'"
 
+msgid "multiple_matches"
+msgstr "Várias correspondências para '%s'. Qual você quis dizer?"
+
+
 msgid "error_fetch_title"
 msgstr "Falha na obtenção"
 

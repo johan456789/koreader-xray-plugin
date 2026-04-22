@@ -767,6 +767,10 @@ msgstr "Buscar"
 msgid "character_not_found"
 msgstr "No se encontró ningún personaje que coincida con '%s'"
 
+msgid "multiple_matches"
+msgstr "Varias coincidencias para '%s'. ¿Cuál quisiste decir?"
+
+
 msgid "error_fetch_title"
 msgstr "Error al obtener datos"
 

@@ -227,6 +227,7 @@ function Localization:t(key, ...)
             search_hint = "Enter character name",
             search_button = "Search",
             character_not_found = "No character found matching '%s'",
+            multiple_matches = "Multiple matches for '%s'. Which did you mean?",
         }
         translation = fallbacks[key] or key
     end

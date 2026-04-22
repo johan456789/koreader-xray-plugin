@@ -102,6 +102,9 @@ msgstr "Ara"
 msgid "character_not_found"
 msgstr "'%s' ile eşleşen karakter bulunamadı"
 
+msgid "multiple_matches"
+msgstr "'%s' için birden fazla eşleşme bulundu. Hangisini kastediyordunuz?"
+
 msgid "error_fetch_title"
 msgstr "Veri Çekme Başarısız"
 

@@ -531,4 +531,16 @@ function M.checkForUpdates(loc)
     M._doCheckForUpdates(current)
 end
 
+function M.checkSilentForUpdates(loc)
+    M.loc = loc
+    local current = _currentVersion()
+    local release = _doFetch()
+    
+    if release and not release.error then
+        if _versionLessThan(current, release.version) then
+            _showUpdateDialog(release, current)
+        end
+    end
+end
+
 return M

@@ -118,6 +118,11 @@ function XRayPlugin:onReaderReady()
     self.last_auto_chapter = nil
     self.chapters_fetched = {}
     self.bg_fetch_pending = false
+
+    -- Weekly silent update check
+    UIManager:scheduleIn(10, function()
+        self:checkWeeklyUpdate()
+    end)
 end
 
 function XRayPlugin:onPageUpdate(pageno)
@@ -1982,6 +1987,26 @@ function XRayPlugin:showConfigSummary()
     add("gemini", "Google Gemini"); add("chatgpt", "ChatGPT")
     
     UIManager:show(InfoMessage:new{ text = text, timeout = 15 })
+end
+
+function XRayPlugin:checkWeeklyUpdate()
+    if not self.ai_helper or not self.ai_helper.settings then return end
+    
+    local last_check = self.ai_helper.settings.last_update_check or 0
+    local now = os.time()
+    local week_seconds = 7 * 24 * 60 * 60
+    
+    if (now - last_check) > week_seconds then
+        local NetworkMgr = require("ui/network/manager")
+        if NetworkMgr:isOnline() then
+            self:log("XRayPlugin: Triggering weekly silent update check")
+            self.ai_helper:saveSettings({ last_update_check = now })
+            local updater = require("xray_updater")
+            updater.checkSilentForUpdates(self.loc)
+        else
+            self:log("XRayPlugin: Skipping weekly update check (offline)")
+        end
+    end
 end
 
 return XRayPlugin
