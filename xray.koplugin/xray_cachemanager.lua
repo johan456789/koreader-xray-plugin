@@ -1,5 +1,11 @@
 -- CacheManager - X-Ray data caching system
-local lfs = require("libs/libkoreader-lfs")
+local ok, lfs = pcall(require, "libs/libkoreader-lfs")
+if not ok or type(lfs) ~= "table" then
+    ok, lfs = pcall(require, "lfs")
+end
+if not ok or type(lfs) ~= "table" then
+    lfs = nil
+end
 local logger = require("logger")
 local DocSettings = require("docsettings")
 local AIHelper = require("xray_aihelper")
@@ -30,6 +36,7 @@ end
 
 -- Ensure directory exists
 function CacheManager:ensureDirectory(path)
+    if not lfs then return true end -- Assume it exists if we can't check
     local dir = path:match("(.+)/[^/]+$")
     if not dir then
         return false
@@ -125,11 +132,21 @@ function CacheManager:loadCache(book_path)
     end
     
     -- Check if cache file exists
-    local attr = lfs.attributes(cache_file)
-    if not attr then
-        logger.info("CacheManager: No cache file found")
-        AIHelper:log("CacheManager: No cache file found for " .. tostring(book_path))
-        return nil
+    if lfs then
+        local attr = lfs.attributes(cache_file)
+        if not attr then
+            logger.info("CacheManager: No cache file found")
+            AIHelper:log("CacheManager: No cache file found for " .. tostring(book_path))
+            return nil
+        end
+    else
+        -- If no lfs, try to open the file directly to see if it exists
+        local f = io.open(cache_file, "r")
+        if f then
+            f:close()
+        else
+            return nil
+        end
     end
     
     -- Load cache

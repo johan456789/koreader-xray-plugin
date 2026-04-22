@@ -460,6 +460,7 @@ function AIHelper:loadConfig()
 end
 
 function AIHelper:loadSettings()
+    self.settings = self.settings or {}
     local DataStorage = require("datastorage")
     local xray_dir = DataStorage:getSettingsDir() .. "/xray"
     
@@ -467,15 +468,17 @@ function AIHelper:loadSettings()
     if not ok or type(lfs) ~= "table" then
         ok, lfs = pcall(require, "lfs")
     end
-    if not ok or type(lfs) ~= "table" then
-        self:log("CRITICAL ERROR: Failed to load 'lfs' module in loadSettings. Settings will not be loaded. Error: " .. tostring(lfs))
-        return
-    end
-    if lfs.attributes(xray_dir, "mode") ~= "directory" then
-        lfs.mkdir(xray_dir)
-    end
     
     local settings = {}
+    
+    if not ok or type(lfs) ~= "table" then
+        self:log("AIHelper: Settings will be in-memory only (lfs module missing)")
+    else
+        if lfs.attributes(xray_dir, "mode") ~= "directory" then
+            lfs.mkdir(xray_dir)
+        end
+    end
+    
     local settings_file = xray_dir .. "/settings.json"
     
     -- Migration from old .txt files
@@ -517,7 +520,7 @@ function AIHelper:loadSettings()
     if not settings.chatgpt_model then settings.chatgpt_model = self.providers.chatgpt.model end
     
     -- Migration to unified Primary and Secondary AI logic
-    if not settings.primary_ai then
+    if type(settings.primary_ai) ~= "table" or type(settings.secondary_ai) ~= "table" then
         local def_prov = settings.default_provider or "gemini"
         if def_prov == "gemini" then
             settings.primary_ai = { provider = "gemini", model = settings.gemini_primary_model or "gemini-2.5-flash" }
@@ -566,7 +569,7 @@ function AIHelper:saveSettings(new_settings)
         ok, lfs = pcall(require, "lfs")
     end
     if not ok or type(lfs) ~= "table" then
-        self:log("CRITICAL ERROR: Failed to load 'lfs' module in saveSettings. Settings will not be saved. Error: " .. tostring(lfs))
+        self:log("AIHelper: saveSettings skipped (lfs missing)")
         return
     end
     if lfs.attributes(xray_dir, "mode") ~= "directory" then

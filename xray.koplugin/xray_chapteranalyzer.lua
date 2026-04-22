@@ -71,10 +71,10 @@ function ChapterAnalyzer:getReflowableText(ui)
     local chapter_title = default_chapter_title
     
     for i, chapter in ipairs(toc) do
-        if chapter.page <= current_pos then
+        if chapter.page and chapter.page <= current_pos then
             current_chapter = chapter
             chapter_title = chapter.title or default_chapter_title
-        else
+        elseif chapter.page then
             break
         end
     end
@@ -194,12 +194,12 @@ function ChapterAnalyzer:getPageBasedText(ui)
     local next_chapter = nil
     
     for i, chapter in ipairs(toc) do
-        if chapter.page <= current_page then
+        if chapter.page and chapter.page <= current_page then
             current_chapter = chapter
             if i < #toc then
                 next_chapter = toc[i + 1]
             end
-        else
+        elseif chapter.page then
             break
         end
     end

@@ -56,6 +56,12 @@ function XRayPlugin:init()
     self.auto_fetch_enabled = not (self.ai_helper.settings and
         self.ai_helper.settings.auto_fetch_on_chapter == false)
 
+    -- Data tables initialization
+    self.characters = {}
+    self.locations = {}
+    self.timeline = {}
+    self.historical_figures = {}
+
     -- Modular lookup logic for text selection
     local LookupManager = require("xray_lookupmanager")
     self.lookup_manager = LookupManager:new(self)
@@ -1822,12 +1828,13 @@ function XRayPlugin:showFullXRayMenu()
 end
 
 function XRayPlugin:getAPIKeySelectionMenu(provider, provider_name)
-    local config_key = self.ai_helper.config_keys[provider]
+    local config_key = (self.ai_helper and self.ai_helper.config_keys) and self.ai_helper.config_keys[provider] or nil
     
     local menu_items = {
         {
             text = "Use key from config.lua: " .. (config_key and #config_key > 0 and config_key or "(Not set)"),
             checked_func = function() 
+                if not self.ai_helper or not self.ai_helper.providers or not self.ai_helper.providers[provider] then return false end
                 return not self.ai_helper.providers[provider].ui_key_active 
             end,
             callback = function()
@@ -1837,12 +1844,13 @@ function XRayPlugin:getAPIKeySelectionMenu(provider, provider_name)
             end
         },
         {
-            text = "Enter UI override key: " .. (self.ai_helper.settings[provider .. "_api_key"] or "(Not set)"),
+            text = "Enter UI override key: " .. ((self.ai_helper and self.ai_helper.settings and self.ai_helper.settings[provider .. "_api_key"]) or "(Not set)"),
             checked_func = function() 
+                if not self.ai_helper or not self.ai_helper.providers or not self.ai_helper.providers[provider] then return false end
                 return self.ai_helper.providers[provider].ui_key_active 
             end,
             callback = function()
-                local ui_key = self.ai_helper.settings[provider .. "_api_key"]
+                local ui_key = (self.ai_helper and self.ai_helper.settings) and self.ai_helper.settings[provider .. "_api_key"] or nil
                 
                 -- If we have a UI key but it's not currently active, let's just activate it
                 if ui_key and #ui_key > 0 and not self.ai_helper.providers[provider].ui_key_active then
@@ -1889,12 +1897,13 @@ function XRayPlugin:getAIModelSelectionMenu(setting_type)
     }
     
     local menu_items = {}
-    for _, m in ipairs(models) do
+    for i, m in ipairs(models) do
         table.insert(menu_items, {
             text = m.name,
             checked_func = function()
+                if not self.ai_helper or not self.ai_helper.settings then return false end
                 local current = setting_type == "primary" and self.ai_helper.settings.primary_ai or self.ai_helper.settings.secondary_ai
-                if not current then return false end
+                if type(current) ~= "table" then return false end
                 return current.provider == m.provider and current.model == m.id
             end,
             callback = function()
@@ -1902,16 +1911,17 @@ function XRayPlugin:getAIModelSelectionMenu(setting_type)
                 UIManager:setDirty(nil, "ui")
             end
         })
+        if i == #models then
+            menu_items[#menu_items].separator = true
+        end
     end
-    
-    table.insert(menu_items, { separator = true })
     table.insert(menu_items, {
         text = "Enter custom model...",
         keep_menu_open = true,
         callback = function()
             local InputDialog = require("ui/widget/inputdialog")
             local input_dialog
-            local current = setting_type == "primary" and self.ai_helper.settings.primary_ai or self.ai_helper.settings.secondary_ai
+            local current = (self.ai_helper and self.ai_helper.settings) and (setting_type == "primary" and self.ai_helper.settings.primary_ai or self.ai_helper.settings.secondary_ai) or nil
             input_dialog = InputDialog:new{
                 title = "Custom " .. setting_type:gsub("^%l", string.upper) .. " Model",
                 input = current and current.model or "",
@@ -1971,8 +1981,8 @@ end
 function XRayPlugin:showConfigSummary()
     local text = "--- Current Configuration ---\n\n"
     
-    local primary = self.ai_helper.settings.primary_ai
-    local secondary = self.ai_helper.settings.secondary_ai
+    local primary = (self.ai_helper and self.ai_helper.settings) and self.ai_helper.settings.primary_ai or nil
+    local secondary = (self.ai_helper and self.ai_helper.settings) and self.ai_helper.settings.secondary_ai or nil
     
     text = text .. "Primary AI:\n"
     if primary then text = text .. "  Provider: " .. primary.provider .. "\n  Model: " .. primary.model .. "\n\n" else text = text .. "  Default (Gemini)\n\n" end
