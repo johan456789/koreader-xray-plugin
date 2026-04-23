@@ -8,6 +8,9 @@ msgstr ""
 msgid "ai_fetch_complete"
 msgstr "%s üzerinden başarıyla çekildi!\n\nKitap: %s\nYazar: %s\n\nKarakterler: %d\nMekanlar: %d\nTemalar: %d\nZaman Çizelgesi Olayları: %d\nTarihi Kişiler: %d\n\n%s\n\nÖZET:\n%s"
 
+msgid "ai_fetch_complete_msg"
+msgstr "AI Fetch Complete!"
+
 msgid "auto_update_aggressive"
 msgstr "Agresif: her yeni bölümde kontrol eder"
 
@@ -23,14 +26,23 @@ msgstr "Ekonomik: en fazla 15 dk'da bir kontrol eder"
 msgid "auto_update_freq_about"
 msgstr "Otomatik güncelleme, siz okurken arka planda yeni bölüm verilerini kontrol eder.\n\nSINIRLAR VE PERFORMANS\nSık arka plan istekleri PİL ÖMRÜNÜ tüketebilir ve AI SAĞLAYICI HIZ SINIRLARINA takılabilir (özellikle Pro modellerde).\n\nMODLAR\n• Devre Dışı: Arka plan isteği yapılmaz\n• Agresif: Her yeni bölüme girdiğinizde kontrol eder\n• Dengeli: En fazla 5 dakikada bir kontrol eder (önerilen)\n• Ekonomik: En fazla 15 dakikada bir kontrol eder\n• Seyrek: En fazla 30 dakikada bir kontrol eder\n\nNot: Frekans sınırları nedeniyle bir bölüm atlanırsa, X-Ray bir sonraki arka plan çekiminde onu otomatik olarak dahil edecektir."
 
+msgid "auto_update_freq_label"
+msgstr "Background fetching frequency:"
+
 msgid "auto_update_sparse"
 msgstr "Seyrek: en fazla 30 dk'da bir kontrol eder"
+
+msgid "bg_update_complete"
+msgstr "✓ Arka plan X-Ray güncellemesi tamamlandı."
 
 msgid "cache_cleared"
 msgstr "Önbellek temizlendi!\n\nŞimdi yeni verileri çekebilirsiniz:\nMenü → X-Ray → AI Verilerini Çek"
 
 msgid "cache_save_failed"
 msgstr "Önbelleğe kaydetme başarısız"
+
+msgid "cache_save_success"
+msgstr "✓ Cache updated."
 
 msgid "cache_saved"
 msgstr "Önbelleğe kaydedildi!"
@@ -44,8 +56,29 @@ msgstr "Karakter bulunamadı: %s\n\nİpucu: İsmin bir kısmını yazın"
 msgid "close"
 msgstr "Kapat"
 
+msgid "config_api_key_label"
+msgstr "%s API Anahtarı: "
+
+msgid "config_default_gemini"
+msgstr "  Varsayılan (Gemini)"
+
+msgid "config_model"
+msgstr "  Model: "
+
+msgid "config_provider"
+msgstr "  Sağlayıcı: "
+
+msgid "config_status_not_set"
+msgstr "AYARLANMAMIŞ"
+
+msgid "config_status_set"
+msgstr "AYARLANMIŞ"
+
 msgid "current_language"
 msgstr "en"
+
+msgid "dont_ask_again"
+msgstr "Bu kitap için bir daha sorma"
 
 msgid "error_author_fetch_desc"
 msgstr "Yazar bilgisi alınamadı."
@@ -53,11 +86,17 @@ msgstr "Yazar bilgisi alınamadı."
 msgid "error_author_fetch_title"
 msgstr "Yazar Çekme Hatası"
 
+msgid "error_extract_text"
+msgstr "Error: Could not extract book text."
+
 msgid "error_fetch_desc"
 msgstr "X-Ray verileri çekilemedi. API anahtarınızı ve bağlantınızı kontrol edin."
 
 msgid "error_fetch_title"
 msgstr "Veri Çekme Hatası"
+
+msgid "extracting_more_characters"
+msgstr "Extracting additional characters..."
 
 msgid "fetch_button"
 msgstr "Çek"
@@ -77,8 +116,32 @@ msgstr "⏳ Lütfen bekleyin...\nBu işlem 10-50 saniye sürebilir."
 msgid "full_book_option"
 msgstr "Tam Kitap Modu"
 
-msgid "language_changed"
-msgstr "Dil değiştirildi: Türkçe"
+msgid "label_description"
+msgstr "AÇIKLAMA"
+
+msgid "label_gender"
+msgstr "CİNSİYET"
+
+msgid "label_name"
+msgstr "İSİM"
+
+msgid "label_occupation"
+msgstr "MESLEK"
+
+msgid "label_role"
+msgstr "ROL"
+
+msgid "lang_follow_book"
+msgstr "Otomatik (Kitap Dilini Takip Et)"
+
+msgid "lang_follow_system"
+msgstr "Otomatik (Sistem Dilini Takip Et)"
+
+msgid "lang_mismatch_title"
+msgstr "Dil Uyumsuzluğu"
+
+msgid "language_changed_reopen"
+msgstr "Dil değiştirildi. Değişiklikleri görmek için menüyü tekrar açın."
 
 msgid "logs_cleared"
 msgstr "Günlükler temizlendi!"
@@ -107,6 +170,18 @@ msgstr "Önbelleği Temizle"
 msgid "menu_clear_logs"
 msgstr "Günlükleri Temizle"
 
+msgid "menu_config_header"
+msgstr "--- Current Configuration ---"
+
+msgid "menu_custom_model_title"
+msgstr "Özel %s Modeli"
+
+msgid "menu_enter_custom_model"
+msgstr "Özel model girin..."
+
+msgid "menu_enter_ui_key"
+msgstr "Enter UI override key: "
+
 msgid "menu_fetch_author"
 msgstr "Yazar Bilgisini Çek (AI)"
 
@@ -128,11 +203,26 @@ msgstr "Dil"
 msgid "menu_locations"
 msgstr "Mekanlar"
 
+msgid "menu_maintenance"
+msgstr "Bakım"
+
+msgid "menu_primary_ai_model"
+msgstr "Birincil YZ Modeli"
+
+msgid "menu_secondary_ai_model"
+msgstr "İkincil YZ Modeli"
+
+msgid "menu_settings"
+msgstr "Ayarlar"
+
 msgid "menu_timeline"
 msgstr "Zaman Çizelgesi"
 
 msgid "menu_update_xray"
-msgstr "Update X-Ray Data (Merge)"
+msgstr "X-Ray Verilerini Güncelle (Birleştir)"
+
+msgid "menu_view_config"
+msgstr "Yapılandırmayı Görüntüle"
 
 msgid "menu_xray"
 msgstr "X-Ray"
@@ -140,8 +230,26 @@ msgstr "X-Ray"
 msgid "menu_xray_mode"
 msgstr "X-Ray Modu Ayarları"
 
+msgid "model_free"
+msgstr "ücretsiz"
+
+msgid "model_paid"
+msgstr "ücretli"
+
+msgid "msg_added_characters"
+msgstr "%d yeni karakter eklendi!"
+
+msgid "msg_no_bio"
+msgstr "Biyografi bulunamadı."
+
+msgid "msg_suggest_lang"
+msgstr "Bu kitap %s dilinde. X-Ray dilini buna göre değiştirmek ister misiniz?"
+
 msgid "multiple_matches"
 msgstr "'%s' için birden fazla eşleşme bulundu. Hangisini kastediyordunuz?"
+
+msgid "no"
+msgstr "Hayır"
 
 msgid "no_api_key"
 msgstr "AI API anahtarı ayarlanmamış!\n\nAPI anahtarını şuradan girin:\nMenü → X-Ray → AI Ayarları"
@@ -170,8 +278,8 @@ msgstr "Tamam"
 msgid "path"
 msgstr "plugins/xray.koplugin"
 
-msgid "please_restart"
-msgstr "Değişikliklerin etkili olması için lütfen kitabı\nkapatıp tekrar açın."
+msgid "plugin_description"
+msgstr "Amazon Kindle X-Ray gibi, YZ destekli kitap analizi ile okuma deneyiminizi dönüştürün!"
 
 msgid "quick_menu_title"
 msgstr "X-Ray Hızlı Erişim"
@@ -199,6 +307,9 @@ msgstr "Spoilersiz"
 
 msgid "spoiler_free_option"
 msgstr "Spoilersiz Mod (Kitabın %%%d kadarı)"
+
+msgid "spoiler_preference_desc"
+msgstr "Select your spoiler preference for X-Ray data:"
 
 msgid "spoiler_preference_title"
 msgstr "Spoiler Tercihi"
@@ -280,4 +391,7 @@ msgstr "Etkin"
 
 msgid "xray_mode_desc"
 msgstr "Anında arama yapmak için sözlük ve seçim menülerine bir 'X-Ray' düğmesi ekler."
+
+msgid "yes"
+msgstr "Evet"
 

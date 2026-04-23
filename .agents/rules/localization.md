@@ -4,7 +4,7 @@ Whenever you modify translation keys in the Lua code (e.g., adding or removing `
 
 **Command:**
 ```bash
-python xray.koplugin/sync_translations.py
+python tools/sync_translations.py
 ```
 
 This ensures that:

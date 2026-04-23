@@ -8,6 +8,9 @@ msgstr ""
 msgid "ai_fetch_complete"
 msgstr "Successfully fetched from %s!\n\nBook: %s\nAuthor: %s\n\nCharacters: %d\nLocations: %d\nThemes: %d\nTimeline Events: %d\nHistorical Figures: %d\n\n%s\n\nSUMMARY:\n%s"
 
+msgid "ai_fetch_complete_msg"
+msgstr "AI Fetch Complete!"
+
 msgid "auto_update_aggressive"
 msgstr "Aggressive: checks every new chapter"
 
@@ -23,14 +26,23 @@ msgstr "Economical: checks at most every 15 mins"
 msgid "auto_update_freq_about"
 msgstr "Auto-update checks for new chapter data in the background as you read.\n\nLIMITS & PERFORMANCE\nFrequent background requests can drain BATTERY LIFE and may hit AI PROVIDER RATE LIMITS (especially on Pro models).\n\nMODES\n• Disabled: No background requests\n• Aggressive: Checks every time you enter a new chapter\n• Balanced: Checks at most every 5 minutes (recommended)\n• Economical: Checks at most every 15 minutes\n• Sparse: Checks at most every 30 minutes\n\nNote: If a chapter is skipped due to frequency limits, X-Ray will automatically include it in the next background fetch."
 
+msgid "auto_update_freq_label"
+msgstr "Background fetching frequency:"
+
 msgid "auto_update_sparse"
 msgstr "Sparse: checks at most every 30 mins"
+
+msgid "bg_update_complete"
+msgstr "✓ Atualização do X-Ray em segundo plano concluída."
 
 msgid "cache_cleared"
 msgstr "Cache cleared!\n\nYou can now fetch new data:\nMenu → X-Ray → Fetch AI Data"
 
 msgid "cache_save_failed"
 msgstr "Failed to save cache"
+
+msgid "cache_save_success"
+msgstr "✓ Cache updated."
 
 msgid "cache_saved"
 msgstr "Saved to cache!"
@@ -44,8 +56,29 @@ msgstr "Nenhum personagem encontrado correspondente a '%s'"
 msgid "close"
 msgstr "Fechar"
 
+msgid "config_api_key_label"
+msgstr "Chave API %s: "
+
+msgid "config_default_gemini"
+msgstr "  Padrão (Gemini)"
+
+msgid "config_model"
+msgstr "  Modelo: "
+
+msgid "config_provider"
+msgstr "  Provedor: "
+
+msgid "config_status_not_set"
+msgstr "NÃO DEFINIDO"
+
+msgid "config_status_set"
+msgstr "DEFINIDO"
+
 msgid "current_language"
 msgstr "en"
+
+msgid "dont_ask_again"
+msgstr "Não perguntar novamente"
 
 msgid "error_author_fetch_desc"
 msgstr "Não foi possível obter informações do autor."
@@ -53,11 +86,17 @@ msgstr "Não foi possível obter informações do autor."
 msgid "error_author_fetch_title"
 msgstr "Falha ao obter autor"
 
+msgid "error_extract_text"
+msgstr "Error: Could not extract book text."
+
 msgid "error_fetch_desc"
 msgstr "Falha ao obter dados do X-Ray. Verifique sua chave de API e conexão."
 
 msgid "error_fetch_title"
 msgstr "Falha na obtenção"
+
+msgid "extracting_more_characters"
+msgstr "Extracting additional characters..."
 
 msgid "fetch_button"
 msgstr "Fetch"
@@ -77,8 +116,32 @@ msgstr "⏳ Por favor, aguarde...\nPode levar de 10 a 50 segundos."
 msgid "full_book_option"
 msgstr "Full Book Mode"
 
-msgid "language_changed"
-msgstr "Language changed: English"
+msgid "label_description"
+msgstr "DESCRIÇÃO"
+
+msgid "label_gender"
+msgstr "GÊNERO"
+
+msgid "label_name"
+msgstr "NOME"
+
+msgid "label_occupation"
+msgstr "OCUPAÇÃO"
+
+msgid "label_role"
+msgstr "PAPEL"
+
+msgid "lang_follow_book"
+msgstr "Automático (Seguir o livro)"
+
+msgid "lang_follow_system"
+msgstr "Automático (Seguir o sistema)"
+
+msgid "lang_mismatch_title"
+msgstr "Idioma incorreto"
+
+msgid "language_changed_reopen"
+msgstr "Idioma alterado. Reabra o menu para ver as alterações."
 
 msgid "logs_cleared"
 msgstr "Logs limpos!"
@@ -107,6 +170,18 @@ msgstr "Limpar Cache"
 msgid "menu_clear_logs"
 msgstr "Limpar Logs"
 
+msgid "menu_config_header"
+msgstr "--- Current Configuration ---"
+
+msgid "menu_custom_model_title"
+msgstr "Modelo %s personalizado"
+
+msgid "menu_enter_custom_model"
+msgstr "Inserir modelo personalizado..."
+
+msgid "menu_enter_ui_key"
+msgstr "Enter UI override key: "
+
 msgid "menu_fetch_author"
 msgstr "Fetch Author Info (AI)"
 
@@ -128,11 +203,26 @@ msgstr "Idioma"
 msgid "menu_locations"
 msgstr "Locais"
 
+msgid "menu_maintenance"
+msgstr "Manutenção"
+
+msgid "menu_primary_ai_model"
+msgstr "Modelo de IA principal"
+
+msgid "menu_secondary_ai_model"
+msgstr "Modelo de IA secundário"
+
+msgid "menu_settings"
+msgstr "Configurações"
+
 msgid "menu_timeline"
 msgstr "Linha do Tempo"
 
 msgid "menu_update_xray"
 msgstr "Atualizar dados do X-Ray (Mesclar)"
+
+msgid "menu_view_config"
+msgstr "Ver configuração"
 
 msgid "menu_xray"
 msgstr "X-Ray"
@@ -140,8 +230,26 @@ msgstr "X-Ray"
 msgid "menu_xray_mode"
 msgstr "Ajustes do Modo X-Ray"
 
+msgid "model_free"
+msgstr "gratuito"
+
+msgid "model_paid"
+msgstr "pago"
+
+msgid "msg_added_characters"
+msgstr "%d novos personagens adicionados!"
+
+msgid "msg_no_bio"
+msgstr "Nenhuma biografia disponível."
+
+msgid "msg_suggest_lang"
+msgstr "Este livro está em %s. Alterar o idioma do X-Ray para corresponder?"
+
 msgid "multiple_matches"
 msgstr "Várias correspondências para '%s'. Qual você quis dizer?"
+
+msgid "no"
+msgstr "Não"
 
 msgid "no_api_key"
 msgstr "Chave API não configurada!"
@@ -170,8 +278,8 @@ msgstr "OK"
 msgid "path"
 msgstr "plugins/xray.koplugin"
 
-msgid "please_restart"
-msgstr "Feche e abra o livro para aplicar as mudanças."
+msgid "plugin_description"
+msgstr "Transforme sua experiência de leitura com análise de livros por IA, igual ao Amazon Kindle X-Ray!"
 
 msgid "quick_menu_title"
 msgstr "Menu Rápido X-Ray"
@@ -199,6 +307,9 @@ msgstr "Sem spoilers"
 
 msgid "spoiler_free_option"
 msgstr "Spoiler-free Mode (Up to %d%% of the book)"
+
+msgid "spoiler_preference_desc"
+msgstr "Select your spoiler preference for X-Ray data:"
 
 msgid "spoiler_preference_title"
 msgstr "Spoiler Preference"
@@ -280,4 +391,7 @@ msgstr "Ativado"
 
 msgid "xray_mode_desc"
 msgstr "Adiciona um botão 'X-Ray' aos menus de dicionário e seleção para consultas instantâneas."
+
+msgid "yes"
+msgstr "Sim"
 

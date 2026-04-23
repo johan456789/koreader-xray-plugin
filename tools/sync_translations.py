@@ -3,8 +3,8 @@ import os
 import re
 
 # Configuration
-LANGUAGES_DIR = 'languages'
-SOURCE_DIR = '.'
+LANGUAGES_DIR = os.path.join(os.path.dirname(__file__), '..', 'xray.koplugin', 'languages')
+SOURCE_DIR = os.path.join(os.path.dirname(__file__), '..', 'xray.koplugin')
 MASTER_LANG = 'en'
 
 def parse_po(file_path):

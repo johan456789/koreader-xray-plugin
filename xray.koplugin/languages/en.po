@@ -8,6 +8,9 @@ msgstr ""
 msgid "ai_fetch_complete"
 msgstr "Successfully fetched from %s!\n\nBook: %s\nAuthor: %s\n\nCharacters: %d\nLocations: %d\nThemes: %d\nTimeline Events: %d\nHistorical Figures: %d\n\n%s\n\nSUMMARY:\n%s"
 
+msgid "ai_fetch_complete_msg"
+msgstr "AI Fetch Complete!"
+
 msgid "auto_update_aggressive"
 msgstr "Aggressive: checks every new chapter"
 
@@ -23,14 +26,23 @@ msgstr "Economical: checks at most every 15 mins"
 msgid "auto_update_freq_about"
 msgstr "Auto-update checks for new chapter data in the background as you read.\n\nLIMITS & PERFORMANCE\nFrequent background requests can drain BATTERY LIFE and may hit AI PROVIDER RATE LIMITS (especially on Pro models).\n\nMODES\n• Disabled: No background requests\n• Aggressive: Checks every time you enter a new chapter\n• Balanced: Checks at most every 5 minutes (recommended)\n• Economical: Checks at most every 15 minutes\n• Sparse: Checks at most every 30 minutes\n\nNote: If a chapter is skipped due to frequency limits, X-Ray will automatically include it in the next background fetch."
 
+msgid "auto_update_freq_label"
+msgstr "Background fetching frequency:"
+
 msgid "auto_update_sparse"
 msgstr "Sparse: checks at most every 30 mins"
+
+msgid "bg_update_complete"
+msgstr "✓ X-Ray background update complete."
 
 msgid "cache_cleared"
 msgstr "Cache cleared!\n\nYou can now fetch new data:\nMenu → X-Ray → Fetch AI Data"
 
 msgid "cache_save_failed"
 msgstr "Failed to save cache"
+
+msgid "cache_save_success"
+msgstr "✓ Cache updated."
 
 msgid "cache_saved"
 msgstr "Saved to cache!"
@@ -44,8 +56,29 @@ msgstr "No character found matching '%s'"
 msgid "close"
 msgstr "Close"
 
+msgid "config_api_key_label"
+msgstr "%s API Key: "
+
+msgid "config_default_gemini"
+msgstr "  Default (Gemini)"
+
+msgid "config_model"
+msgstr "  Model: "
+
+msgid "config_provider"
+msgstr "  Provider: "
+
+msgid "config_status_not_set"
+msgstr "NOT SET"
+
+msgid "config_status_set"
+msgstr "SET"
+
 msgid "current_language"
 msgstr "en"
+
+msgid "dont_ask_again"
+msgstr "Don't ask again"
 
 msgid "error_author_fetch_desc"
 msgstr "Failed to fetch author info."
@@ -53,11 +86,17 @@ msgstr "Failed to fetch author info."
 msgid "error_author_fetch_title"
 msgstr "Author Fetch Failed"
 
+msgid "error_extract_text"
+msgstr "Error: Could not extract book text."
+
 msgid "error_fetch_desc"
 msgstr "Failed to fetch X-Ray data. Please check your API key and connection."
 
 msgid "error_fetch_title"
 msgstr "Fetch Failed"
+
+msgid "extracting_more_characters"
+msgstr "Extracting additional characters..."
 
 msgid "fetch_button"
 msgstr "Fetch"
@@ -77,8 +116,32 @@ msgstr "⏳ Please wait...\nThis process may take 10-50 seconds."
 msgid "full_book_option"
 msgstr "Full Book Mode"
 
-msgid "language_changed"
-msgstr "Language changed: English"
+msgid "label_description"
+msgstr "DESCRIPTION"
+
+msgid "label_gender"
+msgstr "GENDER"
+
+msgid "label_name"
+msgstr "NAME"
+
+msgid "label_occupation"
+msgstr "OCCUPATION"
+
+msgid "label_role"
+msgstr "ROLE"
+
+msgid "lang_follow_book"
+msgstr "Automatic (Follow Book)"
+
+msgid "lang_follow_system"
+msgstr "Automatic (Follow System)"
+
+msgid "lang_mismatch_title"
+msgstr "Language Mismatch"
+
+msgid "language_changed_reopen"
+msgstr "Language changed. Reopen the menu to see the changes."
 
 msgid "logs_cleared"
 msgstr "Logs cleared!"
@@ -107,6 +170,18 @@ msgstr "Clear Cache"
 msgid "menu_clear_logs"
 msgstr "Clear Logs"
 
+msgid "menu_config_header"
+msgstr "--- Current Configuration ---"
+
+msgid "menu_custom_model_title"
+msgstr "Custom %s Model"
+
+msgid "menu_enter_custom_model"
+msgstr "Enter custom model..."
+
+msgid "menu_enter_ui_key"
+msgstr "Enter UI override key: "
+
 msgid "menu_fetch_author"
 msgstr "Fetch Author Info (AI)"
 
@@ -128,11 +203,26 @@ msgstr "Language"
 msgid "menu_locations"
 msgstr "Locations"
 
+msgid "menu_maintenance"
+msgstr "Maintenance"
+
+msgid "menu_primary_ai_model"
+msgstr "Primary AI Model"
+
+msgid "menu_secondary_ai_model"
+msgstr "Secondary AI Model"
+
+msgid "menu_settings"
+msgstr "Settings"
+
 msgid "menu_timeline"
 msgstr "Timeline"
 
 msgid "menu_update_xray"
 msgstr "Update X-Ray Data (Merge)"
+
+msgid "menu_view_config"
+msgstr "View All Config Values"
 
 msgid "menu_xray"
 msgstr "X-Ray"
@@ -140,8 +230,26 @@ msgstr "X-Ray"
 msgid "menu_xray_mode"
 msgstr "X-Ray Mode Settings"
 
+msgid "model_free"
+msgstr "free"
+
+msgid "model_paid"
+msgstr "paid"
+
+msgid "msg_added_characters"
+msgstr "Added %d new characters!"
+
+msgid "msg_no_bio"
+msgstr "No biography available."
+
+msgid "msg_suggest_lang"
+msgstr "This book is in %s. Switch X-Ray language to match?"
+
 msgid "multiple_matches"
 msgstr "Multiple matches for '%s'. Which did you mean?"
+
+msgid "no"
+msgstr "No"
 
 msgid "no_api_key"
 msgstr "AI API Key not set!\n\nEnter API key in:\nMenu → X-Ray → AI Settings"
@@ -170,8 +278,8 @@ msgstr "OK"
 msgid "path"
 msgstr "plugins/xray.koplugin"
 
-msgid "please_restart"
-msgstr "Please close the book and reopen it\nfor changes to take full effect."
+msgid "plugin_description"
+msgstr "Transform your reading experience with AI-powered book analysis, just like Amazon Kindle X-Ray!"
 
 msgid "quick_menu_title"
 msgstr "X-Ray Quick Access"
@@ -199,6 +307,9 @@ msgstr "Spoiler-free"
 
 msgid "spoiler_free_option"
 msgstr "Spoiler-free Mode (Up to %d%% of the book)"
+
+msgid "spoiler_preference_desc"
+msgstr "Select your spoiler preference for X-Ray data:"
 
 msgid "spoiler_preference_title"
 msgstr "Spoiler Preference"
@@ -280,4 +391,7 @@ msgstr "Enabled"
 
 msgid "xray_mode_desc"
 msgstr "Adds an 'X-Ray' button to dictionary and selection menus for instant lookups."
+
+msgid "yes"
+msgstr "Yes"
 
