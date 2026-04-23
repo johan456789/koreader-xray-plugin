@@ -68,14 +68,8 @@ msgstr "Fetch successful"
 msgid "fetching_ai"
 msgstr "Analisando livro para gerar dados X-Ray..."
 
-msgid "fetching_ai", self.ai_provider or "AI"
-msgstr "fetching_ai", self.ai_provider or "AI"
-
 msgid "fetching_author"
 msgstr "Fetching author info from %s..."
-
-msgid "fetching_author", "AI"
-msgstr "fetching_author", "AI"
 
 msgid "fetching_wait"
 msgstr "⏳ Por favor, aguarde...\nPode levar de 10 a 50 segundos."
@@ -277,9 +271,6 @@ msgstr "What's new:"
 
 msgid "updating_ai"
 msgstr "Atualizando dados do X-Ray..."
-
-msgid "updating_ai", self.ai_provider or "AI"
-msgstr "updating_ai", self.ai_provider or "AI"
 
 msgid "xray_disabled_label"
 msgstr "Desativado"

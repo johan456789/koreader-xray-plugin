@@ -68,14 +68,8 @@ msgstr "Veri çekme başarılı"
 msgid "fetching_ai"
 msgstr "X-Ray verilerini oluşturmak için kitap analiz ediliyor..."
 
-msgid "fetching_ai", self.ai_provider or "AI"
-msgstr "fetching_ai", self.ai_provider or "AI"
-
 msgid "fetching_author"
 msgstr "Yazar bilgisi %s üzerinden çekiliyor..."
-
-msgid "fetching_author", "AI"
-msgstr "fetching_author", "AI"
 
 msgid "fetching_wait"
 msgstr "⏳ Lütfen bekleyin...\nBu işlem 10-50 saniye sürebilir."
@@ -277,9 +271,6 @@ msgstr "What's new:"
 
 msgid "updating_ai"
 msgstr "X-Ray verileri güncelleniyor..."
-
-msgid "updating_ai", self.ai_provider or "AI"
-msgstr "updating_ai", self.ai_provider or "AI"
 
 msgid "xray_disabled_label"
 msgstr "Devre Dışı"

@@ -1,0 +1,283 @@
+msgid ""
+msgstr ""
+"Language-Team: German\n"
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "ai_fetch_complete"
+msgstr "Erfolgreich von %s abgerufen!\n\nBuch: %s\nAutor: %s\n\nCharaktere: %d\nOrte: %d\nThemen: %d\nTimeline-Ereignisse: %d\nHistorische Personen: %d\n\n%s\n\nZUSAMMENFASSUNG:\n%s"
+
+msgid "auto_update_aggressive"
+msgstr "Aggressiv: prüft jedes neue Kapitel"
+
+msgid "auto_update_balanced"
+msgstr "Ausgewogen: prüft max. alle 5 Min."
+
+msgid "auto_update_disabled"
+msgstr "Deaktiviert"
+
+msgid "auto_update_economical"
+msgstr "Sparsam: prüft max. alle 15 Min."
+
+msgid "auto_update_freq_about"
+msgstr "Auto-Update prüft im Hintergrund auf neue Kapiteldaten, während Sie lesen.\n\nLIMITS & PERFORMANCE\nHäufige Hintergrundanfragen können den AKKU belasten und API-LIMITS erreichen (besonders bei Pro-Modellen).\n\nMODI\n• Deaktiviert: Keine Hintergrundanfragen\n• Aggressiv: Prüft bei jedem neuen Kapitel\n• Ausgewogen: Prüft höchstens alle 5 Minuten (empfohlen)\n• Sparsam: Prüft höchstens alle 15 Minuten\n• Selten: Prüft höchstens alle 30 Minuten\n\nHinweis: Wenn ein Kapitel aufgrund von Limits übersprungen wird, wird X-Ray es automatisch beim nächsten Hintergrundabruf einbeziehen."
+
+msgid "auto_update_sparse"
+msgstr "Selten: prüft max. alle 30 Min."
+
+msgid "cache_cleared"
+msgstr "Cache geleert!\n\nSie können jetzt neue Daten abrufen:\nMenü → X-Ray → KI-Daten abrufen"
+
+msgid "cache_save_failed"
+msgstr "Speichern im Cache fehlgeschlagen"
+
+msgid "cache_saved"
+msgstr "Im Cache gespeichert!"
+
+msgid "cancel"
+msgstr "Abbrechen"
+
+msgid "character_not_found"
+msgstr "Kein Charakter gefunden, der auf '%s' passt"
+
+msgid "close"
+msgstr "Schließen"
+
+msgid "current_language"
+msgstr "de"
+
+msgid "error_author_fetch_desc"
+msgstr "Autor-Info konnte nicht abgerufen werden."
+
+msgid "error_author_fetch_title"
+msgstr "Autor-Abruf fehlgeschlagen"
+
+msgid "error_fetch_desc"
+msgstr "X-Ray Daten konnten nicht abgerufen werden. Bitte prüfen Sie API-Key und Verbindung."
+
+msgid "error_fetch_title"
+msgstr "Abruf fehlgeschlagen"
+
+msgid "fetch_button"
+msgstr "Abrufen"
+
+msgid "fetch_successful"
+msgstr "Abruf erfolgreich"
+
+msgid "fetching_ai"
+msgstr "Buch wird analysiert, um X-Ray-Daten zu generieren..."
+
+msgid "fetching_author"
+msgstr "Autor-Info wird von %s abgerufen..."
+
+msgid "fetching_wait"
+msgstr "⏳ Bitte warten...\nDieser Vorgang kann 10-50 Sekunden dauern."
+
+msgid "full_book_option"
+msgstr "Vollständiger Buch-Modus"
+
+msgid "language_changed"
+msgstr "Sprache geändert: Deutsch"
+
+msgid "logs_cleared"
+msgstr "Logs gelöscht!"
+
+msgid "menu_about"
+msgstr "Über"
+
+msgid "menu_ai_settings"
+msgstr "KI-Einstellungen"
+
+msgid "menu_author_info"
+msgstr "Autor-Info"
+
+msgid "menu_auto_update_frequency"
+msgstr "Auto X-Ray Einstellungen"
+
+msgid "menu_characters"
+msgstr "Charaktere"
+
+msgid "menu_chatgpt_key"
+msgstr "ChatGPT API-Key"
+
+msgid "menu_clear_cache"
+msgstr "Cache leeren"
+
+msgid "menu_clear_logs"
+msgstr "Logs löschen"
+
+msgid "menu_fetch_author"
+msgstr "Autor-Info abrufen (KI)"
+
+msgid "menu_fetch_more_chars"
+msgstr "Weitere Charaktere abrufen"
+
+msgid "menu_fetch_xray"
+msgstr "X-Ray Daten abrufen"
+
+msgid "menu_gemini_key"
+msgstr "Google Gemini API-Key"
+
+msgid "menu_historical_figures"
+msgstr "Historische Personen"
+
+msgid "menu_language"
+msgstr "Sprache"
+
+msgid "menu_locations"
+msgstr "Orte"
+
+msgid "menu_timeline"
+msgstr "Timeline"
+
+msgid "menu_update_xray"
+msgstr "X-Ray Daten aktualisieren (Zusammenführen)"
+
+msgid "menu_xray"
+msgstr "X-Ray"
+
+msgid "menu_xray_mode"
+msgstr "X-Ray Modus-Einstellungen"
+
+msgid "multiple_matches"
+msgstr "Mehrere Treffer für '%s'. Welchen meinten Sie?"
+
+msgid "no_api_key"
+msgstr "KI API-Key nicht gesetzt!\n\nGeben Sie den API-Key hier ein:\nMenü → X-Ray → KI-Einstellungen"
+
+msgid "no_author_data_fetch"
+msgstr "Keine Autor-Info verfügbar.\n\nMöchten Sie diese von der KI abrufen?"
+
+msgid "no_character_data"
+msgstr "Noch keine Charakterdaten.\n\nBitte nutzen Sie zuerst 'X-Ray Daten abrufen'."
+
+msgid "no_data_prompt"
+msgstr "Keine X-Ray-Daten für dieses Buch gefunden. Möchten Sie diese jetzt von der KI abrufen?"
+
+msgid "no_historical_data"
+msgstr "Noch keine Daten zu historischen Personen.\n\nBitte nutzen Sie zuerst 'X-Ray Daten abrufen'.\n\nKI wird reale historische Personen im Buch erkennen."
+
+msgid "no_location_data"
+msgstr "Noch keine Ortsdaten. Bitte nutzen Sie zuerst 'X-Ray Daten abrufen'."
+
+msgid "no_timeline_data"
+msgstr "Noch keine Timeline-Daten.\n\nBitte nutzen Sie zuerst 'X-Ray Daten abrufen'.\n\nKI wird wichtige Ereignisse in chronologischer Reihenfolge anzeigen."
+
+msgid "ok"
+msgstr "OK"
+
+msgid "path"
+msgstr "plugins/xray.koplugin"
+
+msgid "please_restart"
+msgstr "Bitte schließen Sie das Buch und öffnen Sie es erneut,\ndamit die Änderungen voll wirksam werden."
+
+msgid "quick_menu_title"
+msgstr "X-Ray Schnellzugriff"
+
+msgid "save"
+msgstr "Speichern"
+
+msgid "search_button"
+msgstr "Suche"
+
+msgid "search_character"
+msgstr "Charaktere suchen..."
+
+msgid "search_character_title"
+msgstr "Charakter-Suche"
+
+msgid "search_hint"
+msgstr "Charakternamen eingeben"
+
+msgid "spoiler_free_about"
+msgstr "Der spoiler-freie Modus begrenzt die KI-Extraktion auf die Seiten, die Sie bereits gelesen haben (bis zu Ihrer aktuellen Seite), um Spoiler aus zukünftigen Kapiteln zu vermeiden.\n\nDer vollständige Buch-Modus analysiert das gesamte Buch, was Spoiler enthalten kann."
+
+msgid "spoiler_free_menu_option"
+msgstr "Spoiler-frei"
+
+msgid "spoiler_free_option"
+msgstr "Spoiler-freier Modus (Bis zu %d%% des Buches)"
+
+msgid "spoiler_preference_title"
+msgstr "Spoiler-Einstellung"
+
+msgid "this_chapter"
+msgstr "Dieses Kapitel"
+
+msgid "this_page"
+msgstr "Diese Seite"
+
+msgid "updater_available_header"
+msgstr "X-Ray %s ist verfügbar!\nSie haben %s."
+
+msgid "updater_btn_cancel"
+msgstr "Abbrechen"
+
+msgid "updater_btn_download"
+msgstr "Herunterladen und installieren"
+
+msgid "updater_btn_later"
+msgstr "Später"
+
+msgid "updater_btn_open_browser"
+msgstr "Im Browser öffnen"
+
+msgid "updater_btn_restart"
+msgstr "Neustart"
+
+msgid "updater_cancelled_check"
+msgstr "Update-Check abgebrochen."
+
+msgid "updater_cancelled_update"
+msgstr "Update abgebrochen."
+
+msgid "updater_check"
+msgstr "Nach Updates suchen"
+
+msgid "updater_checking"
+msgstr "Suche nach Updates..."
+
+msgid "updater_download_prompt"
+msgstr "\n\nJetzt herunterladen und installieren?"
+
+msgid "updater_downloading"
+msgstr "X-Ray %s wird heruntergeladen..."
+
+msgid "updater_err_download"
+msgstr "Download-Fehler: %s"
+
+msgid "updater_err_extract"
+msgstr "Entpackungs-Fehler: %s"
+
+msgid "updater_error_checking"
+msgstr "Fehler beim Suchen nach Updates."
+
+msgid "updater_error_checking_detail"
+msgstr "Fehler beim Suchen nach Updates: %s"
+
+msgid "updater_no_asset"
+msgstr "Keine automatische Update-Datei gefunden.\n\nReleases-Seite auf GitHub öffnen?"
+
+msgid "updater_success_restart"
+msgstr "X-Ray %s erfolgreich installiert.\n\nKOReader neu starten, um das Update anzuwenden?"
+
+msgid "updater_up_to_date"
+msgstr "X-Ray ist auf dem neuesten Stand (%s)."
+
+msgid "updater_whats_new"
+msgstr "Was ist neu:"
+
+msgid "updating_ai"
+msgstr "X-Ray Daten werden aktualisiert..."
+
+msgid "xray_disabled_label"
+msgstr "Deaktiviert"
+
+msgid "xray_enabled_label"
+msgstr "Aktiviert"
+
+msgid "xray_mode_desc"
+msgstr "Fügt eine 'X-Ray'-Schaltfläche zu Wörterbuch- und Auswahlmenüs für sofortige Lookups hinzu."
+
