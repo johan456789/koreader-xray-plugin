@@ -30,3 +30,8 @@ For full setup instructions and a deep dive into features, check out the **[GitH
 - **[AI Providers](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/3.-AI-Providers-&-Models)**: Using Gemini vs ChatGPT.
 - **[Spoiler Protection](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/4.-Spoiler-Protection)**: How we keep the story safe.
 - **[Advanced Usage](https://github.com/ultimatejimmy/koreader-xray-plugin/wiki/Advanced-Usage)**: Gestures, lookups, and manual config.
+
+## Support me
+
+[Buy me a coffee](https://www.buymeacoffee.com/ultimatejimmy)
+
