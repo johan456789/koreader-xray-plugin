@@ -18,7 +18,7 @@ This plugin brings Kindle-style X-Ray features to KOReader. It uses AI to track 
 - **X-Ray Mode**: Get insights while you read by highlighting character names and places and tapping the "X-Ray" button.
 - **Silent Weekly Updates**: Automatically checks for new plugin versions in the background once a week.
 - **Offline First**: You only need internet to fetch the data. After that, it's saved locally.
-- **Multilingual**: Available in English, Spanish, Portuguese, and Turkish.
+- **Multilingual**: Available in English, German, French, Spanish, Brazilian Portuguese, Russian, Turkish, and Simplified Chinese.
 
 ## Documentation
 
