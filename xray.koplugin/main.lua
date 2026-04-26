@@ -690,6 +690,7 @@ function XRayPlugin:showLanguageSelection()
         {{ text = "Türkçe" .. (settings_lang == "tr" and " [OK]" or ""), callback = function() changeLang("tr") end }},
         {{ text = "Português" .. (settings_lang == "pt_br" and " [OK]" or ""), callback = function() changeLang("pt_br") end }},
         {{ text = "Español" .. (settings_lang == "es" and " [OK]" or ""), callback = function() changeLang("es") end }},
+        {{ text = "Українська" .. (settings_lang == "uk" and " [OK]" or ""), callback = function() changeLang("uk") end }},
     }
     
     local dialog_title = (self.loc and self.loc:t("menu_language")) or "Language Selection"
@@ -698,7 +699,7 @@ function XRayPlugin:showLanguageSelection()
 end
 
 function XRayPlugin:resolveLanguage(code)
-    local supported = { en=1, de=1, fr=1, ru=1, zh_CN=1, tr=1, pt_br=1, es=1 }
+    local supported = { en=1, de=1, fr=1, ru=1, zh_CN=1, tr=1, pt_br=1, es=1, uk=1 }
     
     if code == "auto" or not code then
         local gettext = require("gettext")
@@ -762,10 +763,10 @@ function XRayPlugin:checkBookLanguageMatch()
     if book_lang:find("zh") then lang = "zh_CN"
     elseif book_lang:find("pt") then lang = "pt_br" end
     
-    local supported = { 
-        en = "English", de = "Deutsch", fr = "Français", 
-        ru = "Русский", zh_CN = "简体中文", tr = "Türkçe", 
-        pt_br = "Português", es = "Español" 
+    local supported = {
+        en = "English", de = "Deutsch", fr = "Français",
+        ru = "Русский", zh_CN = "简体中文", tr = "Türkçe",
+        pt_br = "Português", es = "Español", uk = "Українська"
     }
     
     if not supported[lang] then return end
