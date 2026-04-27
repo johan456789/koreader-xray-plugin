@@ -99,6 +99,7 @@ function ChapterAnalyzer:getReflowableText(ui)
         if success and result and #result > 100 then
             text = result
             logger.info("ChapterAnalyzer: Got", #text, "characters from positions")
+            collectgarbage("collect") -- Force cleanup after large string allocation
             return text, chapter_title
         end
     end
@@ -112,6 +113,7 @@ function ChapterAnalyzer:getReflowableText(ui)
         if success and result and #result > 100 then
             text = result
             logger.info("ChapterAnalyzer: Got", #text, "characters from xpointer")
+            collectgarbage("collect") -- Force cleanup after large string allocation
             return text, chapter_title
         end
     end
@@ -119,6 +121,7 @@ function ChapterAnalyzer:getReflowableText(ui)
     -- Method 3: Get visible text (fallback)
     text = self:getVisibleTextReflowable(ui)
     logger.info("ChapterAnalyzer: Using visible text fallback")
+    collectgarbage("collect")
     
     return text, chapter_title
 end
@@ -777,100 +780,15 @@ local function extractSentenceSnippet(text, match_pos, max_len)
     if #snippet > max_len then
         snippet = snippet:sub(1, max_len):gsub("%s%S*$", "") .. "…"
     end
+    
+    -- Explicitly truncate to a safe maximum for low-power devices
+    if #snippet > 120 then
+        snippet = snippet:sub(1, 120):gsub("%s%S*$", "") .. "…"
+    end
+    
     return snippet
 end
 
--- Scan every chapter in `toc` for occurrences of `name`.
--- max_page: if non-nil, skips chapters whose start page > max_page (spoiler-free).
--- Returns a list of { chapter, page, snippet } ordered by page.
-function ChapterAnalyzer:findMentionsAcrossChapters(ui, entity, toc, max_page)
-    if not ui or not ui.document or not entity or not entity.name or not toc or #toc == 0 then return {} end
-
-    local name = entity.name
-    local n_low = name:lower()
-    
-    -- Prepare search terms
-    local terms = { { s = n_low, l = #n_low } }
-    
-    -- Fallback: auto-generate first and last name aliases
-    local first_name = name:match("^(%S+)")
-    local last_name  = name:match("(%S+)$")
-    if first_name and #first_name > 2 and first_name ~= name then
-        local fl = first_name:lower()
-        table.insert(terms, { s = fl, l = #fl })
-    end
-    if last_name and #last_name > 2 and last_name ~= first_name and last_name ~= name then
-        local ll = last_name:lower()
-        table.insert(terms, { s = ll, l = #ll })
-    end
-
-    -- Add AI aliases if available
-    if entity.aliases and type(entity.aliases) == "table" then
-        for _, alias in ipairs(entity.aliases) do
-            if type(alias) == "string" and #alias > 2 then
-                local al = alias:lower()
-                local exists = false
-                for _, t in ipairs(terms) do
-                    if t.s == al then exists = true; break end
-                end
-                if not exists then
-                    table.insert(terms, { s = al, l = #al })
-                end
-            end
-        end
-    end
-    
-    local mentions = {}
-    for i, entry in ipairs(toc) do
-        local start_p = tonumber(entry.page)
-        if start_p and max_page and start_p > max_page then break end
-        
-        if entry.xpointer then
-            local ok, raw = pcall(function()
-                return ui.document:getTextFromXPointer(entry.xpointer)
-            end)
-            
-            if ok and raw and #raw > 10 then
-                local t_low = raw:lower()
-                local pos = 1
-                while true do
-                    local min_p = math.huge
-                    local m_len = 0
-                    
-                    for _, t in ipairs(terms) do
-                        local p = t_low:find(t.s, pos, true)
-                        if p and p < min_p then
-                            min_p = p
-                            m_len = t.l
-                        end
-                    end
-                    
-                    if min_p == math.huge then break end
-                    
-                    local m_pos = min_p
-                    local next_entry = toc[i+1]
-                    local end_p = next_entry and tonumber(next_entry.page) or (ui.document.getTotalPages and ui.document:getTotalPages()) or start_p
-                    local est_p = start_p or 1
-                    if end_p and end_p > start_p then
-                        est_p = math.floor(start_p + ((end_p - start_p) * (m_pos / #raw)))
-                    end
-                    
-                    -- SPOILER PREVENTION: stop if this mention is past the max_page
-                    if max_page and est_p > max_page then break end
-                    
-                    table.insert(mentions, {
-                        chapter = entry.title or ("Chapter " .. i),
-                        page = est_p,
-                        snippet = extractSentenceSnippet(raw, m_pos, 300),
-                    })
-                    pos = m_pos + m_len
-                end
-            end
-        end
-    end
-    
-    return mentions
-end
 
 -- Scan a single TOC entry for occurrences of `name`.
 -- Returns a list of { chapter, page, snippet } tables.
@@ -967,6 +885,7 @@ function ChapterAnalyzer:scanMentionsAsync(ui, entity, toc, max_page, on_progres
     end
 
     local UIManager = require("ui/uimanager")
+    local XRayConfig = require("xray_config")
     local cancel_handle = { _cancelled = false }
     function cancel_handle:cancel()
         self._cancelled = true
@@ -975,6 +894,9 @@ function ChapterAnalyzer:scanMentionsAsync(ui, entity, toc, max_page, on_progres
     local mentions = {}
     local current_idx = 1
     local total_chapters = #toc
+    
+    -- Cooperative multitasking: use a longer delay on low-power hardware
+    local yield_delay = XRayConfig.isLowPowerDevice and 0.1 or 0
 
     local function scanNext()
         if cancel_handle._cancelled then
@@ -1011,10 +933,17 @@ function ChapterAnalyzer:scanMentionsAsync(ui, entity, toc, max_page, on_progres
         end
 
         current_idx = current_idx + 1
-        UIManager:scheduleIn(0, scanNext)
+        
+        -- Cleanup after every chapter to keep memory pressure low
+        if current_idx % 2 == 0 then
+            collectgarbage("collect")
+        end
+        
+        UIManager:scheduleIn(yield_delay, scanNext)
     end
 
-    UIManager:scheduleIn(0, scanNext)
+    -- Initial delay to allow UI to settle after a page turn or menu open
+    UIManager:scheduleIn(XRayConfig.isLowPowerDevice and 0.2 or 0, scanNext)
     
     return cancel_handle
 end

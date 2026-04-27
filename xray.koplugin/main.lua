@@ -8,6 +8,7 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local Trapper = require("ui/trapper")
 local logger = require("logger")
 local XRayLogger = require("xray_logger")
+local XRayConfig = require("xray_config")
 local _ = require("gettext")
 local Screen = require("device").screen
 
@@ -62,6 +63,17 @@ function XRayPlugin:init()
     self.timeline = {}
     self.historical_figures = {}
     
+    -- Mentions Feature Gating
+    self.mentions_enabled = true
+    if self.ai_helper.settings and self.ai_helper.settings.mentions_enabled ~= nil then
+        self.mentions_enabled = self.ai_helper.settings.mentions_enabled
+    else
+        -- Default Mentions to OFF on low-power hardware to ensure stability
+        if XRayConfig.isLowPowerDevice then
+            self.mentions_enabled = false
+        end
+    end
+
     -- Track dismissed language suggestions for the current session
     self.suggestion_dismissed = {}
 
@@ -95,11 +107,14 @@ function XRayPlugin:init()
                             UIManager:close(_reader_highlight_instance)
                         end
                         
-                        -- Execute nuclear clear
+                        -- Execute optimized clear
                         self:closeAllMenus()
                         
-                        -- Stage 2: Delayed clear to catch any post-close re-assertions
-                        UIManager:scheduleIn(0.1, function() self:closeAllMenus() end)
+                        -- Explicitly clear selection to prevent dictionary menu re-asserting
+                        if self.ui and self.ui.handleEvent then
+                            local Event = require("ui/event")
+                            self.ui:handleEvent(Event:new("ClearSelection"))
+                        end
                         
                         self.lookup_manager:handleLookup(_reader_highlight_instance.selected_text.text)
                     end,
@@ -159,18 +174,26 @@ function XRayPlugin:onReaderReady()
     end)
 
     -- Backfill mentions for old caches that don't have them yet
-    UIManager:scheduleIn(8, function()
+    local backfill_delay = XRayConfig.isLowPowerDevice and 20 or 8
+    UIManager:scheduleIn(backfill_delay, function()
+        if not self.mentions_enabled then return end
         if not self.mentions_scan_active then
             local has_mentions = false
             for _, c in ipairs(self.characters or {}) do
-                if c.mentions then has_mentions = true; break end
+                if c.mentions and #c.mentions > 0 then has_mentions = true; break end
             end
             if not has_mentions and
                ((self.characters and #self.characters > 0) or
                 (self.locations  and #self.locations  > 0)) then
+                self:log("XRayPlugin: Starting background backfill for mentions")
                 self:buildMentionsInBackground(false)
             end
         end
+    end)
+    
+    -- Background pre-normalization task for instant lookups
+    UIManager:scheduleIn(backfill_delay + 5, function()
+        self:preNormalizeEntitiesInBackground()
     end)
 end
 
@@ -216,27 +239,31 @@ function XRayPlugin:onPageUpdate(pageno)
         return 
     end
 
-    -- Incremental mentions update: fires on every new narrative chapter,
-    -- independent of the API auto-fetch cooldown logic below.
-    local mentions_chapter_id = chapter_title .. "_" .. tostring(chapter_page or 0)
-    if self.last_mentions_chapter ~= mentions_chapter_id then
-        self.last_mentions_chapter = mentions_chapter_id
-        if not self.mentions_scan_active and
-           ((self.characters and #self.characters > 0) or
-            (self.locations  and #self.locations  > 0)) then
-            local toc_entry_for_mentions = nil
-            local next_toc_entry = nil
-            for i, entry in ipairs(toc) do
-                if entry.title == chapter_title and entry.page == chapter_page then
-                    toc_entry_for_mentions = entry
-                    next_toc_entry = toc[i+1]
-                    break
+    -- Incremental mentions update: fires on every new narrative chapter
+    if self.mentions_enabled then
+        local mentions_chapter_id = chapter_title .. "_" .. tostring(chapter_page or 0)
+        if self.last_mentions_chapter ~= mentions_chapter_id then
+            self.last_mentions_chapter = mentions_chapter_id
+            if not self.mentions_scan_active and
+               ((self.characters and #self.characters > 0) or
+                (self.locations  and #self.locations  > 0)) then
+                local toc_entry_for_mentions = nil
+                local next_toc_entry = nil
+                for i, entry in ipairs(toc) do
+                    if entry.title == chapter_title and entry.page == chapter_page then
+                        toc_entry_for_mentions = entry
+                        next_toc_entry = toc[i+1]
+                        break
+                    end
                 end
-            end
-            if toc_entry_for_mentions then
-                UIManager:scheduleIn(4, function()
-                    self:updateMentionsForChapter(toc_entry_for_mentions, next_toc_entry)
-                end)
+                if toc_entry_for_mentions then
+                    local scan_delay = XRayConfig.isLowPowerDevice and 8 or 4
+                    UIManager:scheduleIn(scan_delay, function()
+                        if self.mentions_enabled then
+                            self:updateMentionsForChapter(toc_entry_for_mentions, next_toc_entry)
+                        end
+                    end)
+                end
             end
         end
     end
@@ -391,9 +418,7 @@ function XRayPlugin:autoLoadCache()
     
     if cached_data then
         self:log("XRayPlugin: Cache loaded successfully")
-        -- Set raw data immediately so the reader can render first.
-        -- Pages were already assigned at fetch time and stored in the cache,
-        -- so the data is usable as-is; we just need to sort/dedup.
+        -- Stage 1: Fast data restore (immediate)
         self.book_data = cached_data
         self.characters = cached_data.characters or {}
         self.locations = cached_data.locations or {}
@@ -411,16 +436,10 @@ function XRayPlugin:autoLoadCache()
         end
         if #self.characters > 0 then self.xray_mode_enabled = true end
 
-        -- Defer the expensive sort/dedup/page-assignment to the next scheduler
-        -- tick so the reader can render the book page before we process.
-        -- NOTE: allow_findtext is intentionally false here — pages are already
-        -- stored in the cache; document:findText() must never block the main
-        -- thread at open time (it freezes the Kindle for many seconds on
-        -- omnibus books).
-        UIManager:scheduleIn(0, function()
+        -- Stage 2: Restore Sort Order (Deferred 500ms)
+        UIManager:scheduleIn(500, function()
             if not self.ui or not self.ui.document then return end
-            self:log("XRayPlugin: Running deferred post-load processing")
-            -- Fast restore of sort order using the persisted sort_order field.
+            self:log("XRayPlugin: Stage 2 - Restoring sort order")
             local function restoreOrder(list)
                 table.sort(list, function(a, b)
                     return (a.sort_order or 9999) < (b.sort_order or 9999)
@@ -428,16 +447,19 @@ function XRayPlugin:autoLoadCache()
             end
             restoreOrder(self.characters)
             restoreOrder(self.historical_figures)
-            -- Repair missing page numbers from old caches (Strategies 1-5 only,
-            -- no document text search).
-            local toc = self.ui.document:getToc()
-            self:assignTimelinePages(self.timeline, toc, false)
-            self:sortTimelineByTOC(self.timeline)
-            -- Repair any duplicates that may have accumulated in previous sessions
-            self.characters = self:deduplicateByName(self.characters, "name")
-            self.historical_figures = self:deduplicateByName(self.historical_figures, "name")
-            self.locations = self:deduplicateByName(self.locations, "name")
-            self:log("XRayPlugin: Deferred post-load processing complete")
+            
+            -- Stage 3: Repair Page Numbers & Deduplicate (Deferred another 500ms)
+            UIManager:scheduleIn(500, function()
+                if not self.ui or not self.ui.document then return end
+                self:log("XRayPlugin: Stage 3 - Repairing pages and deduplicating")
+                local toc = self.ui.document:getToc()
+                self:assignTimelinePages(self.timeline, toc, false)
+                self:sortTimelineByTOC(self.timeline)
+                self.characters = self:deduplicateByName(self.characters, "name")
+                self.historical_figures = self:deduplicateByName(self.historical_figures, "name")
+                self.locations = self:deduplicateByName(self.locations, "name")
+                self:log("XRayPlugin: Chunked post-load complete")
+            end)
         end)
     else
         self:log("XRayPlugin: No cache found or failed to load")
@@ -731,17 +753,8 @@ function XRayPlugin:showLanguageSelection()
         
         local msg = (self.loc and self.loc:t("language_changed_reopen")) or "Language changed. Reopen the menu to see the changes."
         
-        -- Use the standard Reader event to close menus safely
-        if self.ui then
-            local Event = require("ui/event")
-            self.ui:handleEvent(Event:new("CloseMenu"))
-        end
-        
-        -- Ensure the standalone menu is also closed
-        if self.xray_menu then
-            UIManager:close(self.xray_menu)
-            self.xray_menu = nil
-        end
+        -- Use the centralized silver-bullet clear
+        self:closeAllMenus()
         
         UIManager:show(InfoMessage:new{
             text = "[OK] " .. msg,
@@ -904,36 +917,63 @@ function XRayPlugin:checkBookLanguageMatch()
 end
 
 function XRayPlugin:closeAllMenus()
-    if self.mentions_menu then UIManager:close(self.mentions_menu); self.mentions_menu = nil end
-    if self.char_menu then UIManager:close(self.char_menu); self.char_menu = nil end
-    if self.loc_menu then UIManager:close(self.loc_menu); self.loc_menu = nil end
-    if self.timeline_menu then UIManager:close(self.timeline_menu); self.timeline_menu = nil end
-    if self.hf_menu then UIManager:close(self.hf_menu); self.hf_menu = nil end
-    if self.xray_menu then UIManager:close(self.xray_menu); self.xray_menu = nil end
+    -- Mark as cancelled to stop background tasks
+    self.is_cancelled = true
     
-    pcall(function()
-        local Event = require("ui/event")
-        
-        -- Source-verified: Close all open DictQuickLookup windows via their window_list
-        -- (from frontend/ui/widget/dictquicklookup.lua DictQuickLookup:onHoldClose)
-        local ok, DictQuickLookup = pcall(require, "ui/widget/dictquicklookup")
-        if ok and DictQuickLookup and DictQuickLookup.window_list then
-            for i = #DictQuickLookup.window_list, 1, -1 do
-                local window = DictQuickLookup.window_list[i]
-                if window and window.onClose then
-                    pcall(function() window:onClose() end)
+    if self.bg_scan_handle and self.bg_scan_handle.cancel then
+        pcall(function() self.bg_scan_handle:cancel() end)
+    end
+    if self.active_mention_scan and self.active_mention_scan.cancel_handle then
+        pcall(function() self.active_mention_scan.cancel_handle:cancel() end)
+        self.active_mention_scan = nil
+    end
+
+    -- 1. Close all custom plugin modals instantly
+    local menus = {
+        self.mentions_menu, self.char_menu, self.loc_menu,
+        self.timeline_menu, self.hf_menu, self.xray_menu
+    }
+    for _, m in ipairs(menus) do
+        if m then UIManager:close(m) end
+    end
+    self.mentions_menu = nil; self.char_menu = nil; self.loc_menu = nil
+    self.timeline_menu = nil; self.hf_menu = nil; self.xray_menu = nil
+    
+    local function executeClear()
+        -- 2. Dismiss native KOReader top menu stack
+        if self.ui and self.ui.menu then
+            pcall(function()
+                if type(self.ui.menu.onCloseReaderMenu) == "function" then
+                    self.ui.menu:onCloseReaderMenu()
+                end
+            end)
+        end
+
+        -- 3. Cleanup selection and highlights
+        pcall(function()
+            local Event = require("ui/event")
+            local ok, DictQuickLookup = pcall(require, "ui/widget/dictquicklookup")
+            if ok and DictQuickLookup and DictQuickLookup.window_list then
+                for i = #DictQuickLookup.window_list, 1, -1 do
+                    local window = DictQuickLookup.window_list[i]
+                    if window and window.onClose then pcall(function() window:onClose() end) end
                 end
             end
-        end
-        
-        -- Source-verified: Call ReaderHighlight:clear() which does the full cleanup:
-        -- document:clearSelection(), is_word_selection=false, hold_pos=nil, selected_text=nil
-        -- (from frontend/apps/reader/modules/readerhighlight.lua)
-        if self.ui.highlight and self.ui.highlight.clear then
-            pcall(function() self.ui.highlight:clear() end)
-        end
-        
-        self.ui:handleEvent(Event:new("ClearSelection"))
+            if self.ui.highlight and self.ui.highlight.clear then
+                pcall(function() self.ui.highlight:clear() end)
+            end
+            self.ui:handleEvent(Event:new("ClearSelection"))
+        end)
+    end
+    
+    -- Pass 1: Immediate
+    executeClear()
+    
+    -- Pass 2: Staggered 100ms safety pass
+    UIManager:scheduleIn(0.1, function()
+        executeClear()
+        -- Reset cancellation flag after all passes are done
+        self.is_cancelled = false
     end)
 end
 
@@ -970,6 +1010,7 @@ function XRayPlugin:showCharacters()
         is_borderless = true,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
+        on_close_callback = function() self:showFullXRayMenu() end,
     }
     UIManager:show(self.char_menu)
 end
@@ -1054,15 +1095,21 @@ function XRayPlugin:buildMentionsInBackground(is_from_fetch)
 
     local queue = {}
     for _, c in ipairs(self.characters or {}) do
-        if c.name then table.insert(queue, { entity = c, name = c.name }) end
+        -- ONLY scan characters that have existing mentions (activated)
+        -- Dormant entities wait for manual "Find Mentions" trigger.
+        if c.name and c.mentions and #c.mentions > 0 then
+            table.insert(queue, { entity = c, name = c.name })
+        end
     end
     for _, l in ipairs(self.locations or {}) do
-        if l.name then table.insert(queue, { entity = l, name = l.name }) end
+        if l.name and l.mentions and #l.mentions > 0 then
+            table.insert(queue, { entity = l, name = l.name })
+        end
     end
     if #queue == 0 then return end
 
     self.mentions_scan_active = true
-    self:log("XRayPlugin: Starting full background mentions scan (" .. #queue .. " entities)")
+    self:log("XRayPlugin: Background mentions update for " .. #queue .. " activated entities")
     if not self.chapter_analyzer then
         self.chapter_analyzer = require("xray_chapteranalyzer"):new()
     end
@@ -1078,13 +1125,20 @@ function XRayPlugin:buildMentionsInBackground(is_from_fetch)
             self:saveMentionsToCache()
             return
         end
-        local item = queue[idx]; idx = idx + 1
-        local ok, result = pcall(function()
-            return self.chapter_analyzer:findMentionsAcrossChapters(
-                self.ui, item.entity, toc, max_page)
-        end)
-        if ok and result then item.entity.mentions = result end
-        UIManager:scheduleIn(0, scanNext)
+        
+        local item = queue[idx]
+        idx = idx + 1
+        
+        -- Use the new fully asynchronous scanner for background work
+        self.bg_scan_handle = self.chapter_analyzer:scanMentionsAsync(
+            self.ui, item.entity, toc, max_page,
+            nil, -- no progress callback for silent background work
+            function(result)
+                if result then item.entity.mentions = result end
+                -- Yield between entities
+                UIManager:scheduleIn(XRayConfig.isLowPowerDevice and 0.5 or 0, scanNext)
+            end
+        )
     end
     UIManager:scheduleIn(is_from_fetch and 3 or 1, scanNext)
 end
@@ -1116,6 +1170,13 @@ function XRayPlugin:updateMentionsForChapter(toc_entry, next_toc_entry)
             return
         end
         local entity = all_entities[idx]; idx = idx + 1
+        
+        -- ONLY scan entities that are already activated with mentions
+        if not entity.mentions or #entity.mentions == 0 then
+            UIManager:scheduleIn(0, scanNext)
+            return
+        end
+        
         local ok, result = pcall(function()
             return self.chapter_analyzer:findMentionsInChapter(
                 self.ui, entity, toc_entry, next_toc_entry)
@@ -1141,9 +1202,49 @@ function XRayPlugin:updateMentionsForChapter(toc_entry, next_toc_entry)
                 end)
             end
         end
-        UIManager:scheduleIn(0, scanNext)
+        UIManager:scheduleIn(XRayConfig.isLowPowerDevice and 0.1 or 0, scanNext)
     end
     UIManager:scheduleIn(0, scanNext)
+end
+
+-- Pre-calculate normalized names for all characters/locations to make lookups instantaneous.
+function XRayPlugin:preNormalizeEntitiesInBackground()
+    if not self.characters and not self.locations then return end
+    
+    local queue = {}
+    for _, c in ipairs(self.characters or {}) do
+        if c.name and not c._norm_name then table.insert(queue, c) end
+    end
+    for _, l in ipairs(self.locations or {}) do
+        if l.name and not l._norm_name then table.insert(queue, l) end
+    end
+    
+    if #queue == 0 then return end
+    
+    local idx = 1
+    local function processNext()
+        if not self.ui or not self.ui.document then return end
+        if idx > #queue then 
+            self:log("XRayPlugin: Pre-normalization complete")
+            return 
+        end
+        
+        local item = queue[idx]
+        idx = idx + 1
+        
+        -- Cache normalized name and aliases
+        item._norm_name = self:normalizeChapterName(item.name)
+        if item.aliases then
+            item._norm_aliases = {}
+            for _, alias in ipairs(item.aliases) do
+                table.insert(item._norm_aliases, self:normalizeChapterName(alias))
+            end
+        end
+        
+        -- Yield to keep UI snappy
+        UIManager:scheduleIn(XRayConfig.isLowPowerDevice and 0.05 or 0, processNext)
+    end
+    processNext()
 end
 
 -- Save characters/locations (with mentions) back to the cache file.
@@ -1247,6 +1348,14 @@ function XRayPlugin:buildMentionsMenuItems(entity)
             keep_menu_open = true,
             callback = function() end, -- do nothing, just status
         })
+        
+        -- Navigation is disabled during scan to prevent race conditions/crashes
+        table.insert(items, {
+            text = "\xe2\x9a\xa0 " .. (self.loc:t("mentions_wait_scan") or "Wait for scan to finish before navigating..."),
+            keep_menu_open = true,
+            callback = function() end,
+        })
+        
         table.insert(items, {
             text = "\xE2\x9C\x96 " .. (self.loc:t("close") or "Close"),
             keep_menu_open = true,
@@ -1290,7 +1399,8 @@ function XRayPlugin:buildMentionsMenuItems(entity)
                         if self.active_mention_scan and self.active_mention_scan.entity_name == name then
                             self.active_mention_scan.chapter_idx = chapter_idx
                             self.active_mention_scan.total_chapters = total_chapters
-                            if self.mentions_menu then
+                            -- Only update the menu at significant intervals or if complete to reduce UI churn
+                            if self.mentions_menu and (chapter_idx % 10 == 0 or chapter_idx == total_chapters) then
                                 entity.mentions = mentions_so_far
                                 self:updateMentionsMenuInPlace(entity)
                             end
@@ -1322,33 +1432,37 @@ function XRayPlugin:buildMentionsMenuItems(entity)
         return items
     end
 
+    -- Sort mentions by page before displaying
+    table.sort(mentions, function(a, b) return (a.page or 0) < (b.page or 0) end)
+
     for _, m in ipairs(mentions) do
-        local header = "p." .. tostring(m.page) .. " \xE2\x80\x94 " .. (m.chapter or "")
-        local snip   = (m.snippet and m.snippet ~= "") and ("\n" .. m.snippet) or ""
-        local pg     = m.page
+        local pg = m.page
+        local header = "p." .. tostring(pg) .. " \xE2\x80\x94 " .. (m.chapter or "")
+        
+        -- Truncate snippet further for menu display to save memory
+        local snippet = m.snippet or ""
+        if #snippet > 100 then
+            snippet = snippet:sub(1, 100):gsub("%s%S*$", "") .. "…"
+        end
+        local snip   = (snippet ~= "") and ("\n" .. snippet) or ""
+        
         table.insert(items, {
             text = header .. snip,
             keep_menu_open = true,
             callback = function()
-                self:closeAllMenus()
+                -- Navigation is only allowed when NOT scanning
+                if is_scanning then return end
+                
+                -- Double-tick sequence for reliable menu dismissal (Silver Bullet)
+                if self.mentions_menu then UIManager:close(self.mentions_menu) end
+                
                 UIManager:nextTick(function()
-                    local Event = require("ui/event")
-                    UIManager:broadcastEvent(Event:new("ClearSelection"))
+                    self:closeAllMenus()
                     
-                    local dict_ok, DictQuickLookup = pcall(require, "ui/widget/dictquicklookup")
-                    if dict_ok and DictQuickLookup and DictQuickLookup.window_list then
-                        for i = #DictQuickLookup.window_list, 1, -1 do
-                            local window = DictQuickLookup.window_list[i]
-                            if window and window.onClose then
-                                pcall(function() window:onClose() end)
-                            end
-                        end
-                    end
-                    if self.ui.highlight and self.ui.highlight.clear then
-                        pcall(function() self.ui.highlight:clear() end)
-                    end
-                    
-                    self.ui:handleEvent(Event:new("GotoPage", pg))
+                    UIManager:nextTick(function()
+                        local Event = require("ui/event")
+                        self.ui:handleEvent(Event:new("GotoPage", pg))
+                    end)
                 end)
             end,
         })
@@ -1380,6 +1494,7 @@ function XRayPlugin:showMentionsMenu(entity)
         is_borderless  = true,
         width          = Screen:getWidth(),
         height         = Screen:getHeight(),
+        on_close_callback = function() self:showFullXRayMenu() end,
     }
     UIManager:show(self.mentions_menu)
 end
@@ -1454,7 +1569,7 @@ function XRayPlugin:showMentionsSettings()
                     text = self.loc:t("menu_about") or "About",
                     callback = function()
                         UIManager:show(InfoMessage:new{
-                            text = self.loc:t("mentions_setting_desc") or "Mentions scanning allows you to find every occurrence of a character or location in the book. This happens automatically in the background to ensure the reader stays responsive.\n\nDisabling this will hide the 'Find Mentions' button.",
+                            text = self.loc:t("mentions_setting_desc") or "Mentions scanning allows you to find every occurrence of a character or location in the book. This happens automatically in the background to ensure the reader stays responsive.\n\nDisabling this will stop all background scanning and hide the 'Find Mentions' button.",
                             timeout = 30
                         })
                     end
@@ -2452,6 +2567,7 @@ function XRayPlugin:showLocations()
         is_borderless = true,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
+        on_close_callback = function() self:showFullXRayMenu() end,
     }
     UIManager:show(self.loc_menu)
 end
@@ -2561,7 +2677,15 @@ function XRayPlugin:showTimeline()
             end
         })
     end
-    UIManager:show(Menu:new{ title = self.loc:t("menu_timeline"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
+    self.timeline_menu = Menu:new{ 
+        title = self.loc:t("menu_timeline"), 
+        item_table = items, 
+        is_borderless = true, 
+        width = Screen:getWidth(), 
+        height = Screen:getHeight(),
+        on_close_callback = function() self:showFullXRayMenu() end,
+    }
+    UIManager:show(self.timeline_menu)
 end
 
 function XRayPlugin:showHistoricalFigures()
@@ -2576,7 +2700,15 @@ function XRayPlugin:showHistoricalFigures()
             end
         })
     end
-    UIManager:show(Menu:new{ title = self.loc:t("menu_historical_figures"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
+    self.hf_menu = Menu:new{ 
+        title = self.loc:t("menu_historical_figures"), 
+        item_table = items, 
+        is_borderless = true, 
+        width = Screen:getWidth(), 
+        height = Screen:getHeight(),
+        on_close_callback = function() self:showFullXRayMenu() end,
+    }
+    UIManager:show(self.hf_menu)
 end
 
 function XRayPlugin:showQuickXRayMenu() self:showFullXRayMenu() end

@@ -58,47 +58,94 @@ function LookupManager:lookupAll(text)
 
     local seen = {}  -- tracks already-added names across passes
 
-    -- Pass 1: Exact match
-    local results = collectMatches(categories, seen, function(name)
-        return self:normalize(name) == query
+    -- Pass 1: Exact match (using cached normalized names if available)
+    local results = collectMatches(categories, seen, function(name, cat_item)
+        local item = cat_item -- the specific item from the list
+        -- Note: collectMatches passes (item.name, cat) where cat is {list, type}
+        -- Wait, collectMatches implementation is: testFn(item.name, cat)
+        -- I need the item itself to check _norm_name.
+        -- Let's check collectMatches again.
+        return nil -- dummy
     end)
-    if #results > 0 then return results end
+    -- Actually, let's just rewrite the passes for performance
+    
+    local final_results = {}
+    
+    local function addIfMatch(item, item_type, score)
+        local n = (item.name or ""):lower()
+        if seen[n] then return end
+        
+        local norm = item._norm_name or self:normalize(item.name)
+        
+        -- Exact
+        if norm == query then
+            seen[n] = true
+            table.insert(final_results, { item = item, item_type = item_type, score = 100 })
+            return
+        end
+        
+        -- Aliases Exact
+        if item._norm_aliases then
+            for _, anorm in ipairs(item._norm_aliases) do
+                if anorm == query then
+                    seen[n] = true
+                    table.insert(final_results, { item = item, item_type = item_type, score = 95 })
+                    return
+                end
+            end
+        end
+        
+        -- Contains / Contained (Pass 2 & 3 combined)
+        if #norm >= 3 and (query:find(norm, 1, true) or norm:find(query, 1, true)) then
+            seen[n] = true
+            table.insert(final_results, { item = item, item_type = item_type, score = 50 })
+            return
+        end
+    end
 
-    -- Pass 2: The selected text contains a full item name (≥3 chars)
-    results = collectMatches(categories, seen, function(name)
-        local norm = self:normalize(name)
-        return #norm >= 3 and query:find(norm, 1, true)
-    end)
-    if #results > 0 then return results end
+    for _, cat in ipairs(categories) do
+        if cat.list then
+            for _, item in ipairs(cat.list) do
+                addIfMatch(item, cat.type)
+            end
+        end
+    end
+    
+    if #final_results > 0 then
+        table.sort(final_results, function(a, b) return a.score > b.score end)
+        return final_results
+    end
 
-    -- Pass 3: The item name contains the selected text
-    results = collectMatches(categories, seen, function(name)
-        return self:normalize(name):find(query, 1, true) ~= nil
-    end)
-    if #results > 0 then return results end
-
-    -- Pass 4: Keyword matching — any word in the query is a significant part of a name
+    -- Pass 4: Keyword matching (only if no exact/contains hits)
     local words = {}
     for word in query:gmatch("[%w%z\128-\255]+") do
         if #word >= 3 then table.insert(words, word) end
     end
 
     if #words > 0 then
-        results = collectMatches(categories, seen, function(name)
-            local norm = self:normalize(name)
-            for _, w in ipairs(words) do
-                if norm == w
-                    or norm:find("^" .. w .. " ")
-                    or norm:find(" "  .. w .. "$")
-                    or norm:find(" "  .. w .. " ") then
-                    return true
+        for _, cat in ipairs(categories) do
+            if cat.list then
+                for _, item in ipairs(cat.list) do
+                    local n = (item.name or ""):lower()
+                    if not seen[n] then
+                        local norm = item._norm_name or self:normalize(item.name)
+                        for _, w in ipairs(words) do
+                            if norm == w
+                                or norm:find("^" .. w .. " ")
+                                or norm:find(" "  .. w .. "$")
+                                or norm:find(" "  .. w .. " ") then
+                                seen[n] = true
+                                table.insert(final_results, { item = item, item_type = cat.type, score = 10 })
+                                break
+                            end
+                        end
+                    end
                 end
             end
-            return false
-        end)
+        end
     end
 
-    return results
+    return final_results
 end
 
 -- Convenience single-result wrapper used by callers that don't need disambiguation
