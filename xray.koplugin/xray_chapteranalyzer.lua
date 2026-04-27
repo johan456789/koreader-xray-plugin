@@ -803,12 +803,16 @@ function ChapterAnalyzer:findMentionsAcrossChapters(ui, name, toc, max_page)
         if not ok or not raw_text or #raw_text < 10 then goto next_ch end
 
         local text_lower = raw_text:lower()
-        local match_pos  = text_lower:find(name_lower, 1, true)
-        if not match_pos and first_lower then
-            match_pos = text_lower:find(first_lower, 1, true)
-        end
+        local pos = 1
+        while true do
+            local match_pos = text_lower:find(name_lower, pos, true)
+            local match_len = #name_lower
+            if not match_pos and first_lower then
+                match_pos = text_lower:find(first_lower, pos, true)
+                match_len = #first_lower
+            end
+            if not match_pos then break end
 
-        if match_pos then
             -- Interpolate the exact page based on character offset in the chapter
             local next_entry = toc[i+1]
             local end_page = next_entry and tonumber(next_entry.page) or (ui.document.getTotalPages and ui.document:getTotalPages()) or start_page
@@ -826,6 +830,7 @@ function ChapterAnalyzer:findMentionsAcrossChapters(ui, name, toc, max_page)
                 page    = est_page,
                 snippet = extractSentenceSnippet(raw_text, match_pos, 300),
             })
+            pos = match_pos + match_len
         end
         ::next_ch::
     end
@@ -834,27 +839,32 @@ function ChapterAnalyzer:findMentionsAcrossChapters(ui, name, toc, max_page)
 end
 
 -- Scan a single TOC entry for occurrences of `name`.
--- Returns a { chapter, page, snippet } table, or nil if not found.
+-- Returns a list of { chapter, page, snippet } tables.
 function ChapterAnalyzer:findMentionsInChapter(ui, name, toc_entry, next_toc_entry)
-    if not ui or not ui.document or not name or not toc_entry then return nil end
-    if not toc_entry.xpointer then return nil end
+    if not ui or not ui.document or not name or not toc_entry then return {} end
+    if not toc_entry.xpointer then return {} end
 
     local name_lower  = name:lower()
     local first_name  = name:match("^(%S+)")
     local first_lower = (first_name and #first_name > 3) and first_name:lower() or nil
+    local chapter_mentions = {}
 
     local ok, raw_text = pcall(function()
         return ui.document:getTextFromXPointer(toc_entry.xpointer) or ""
     end)
-    if not ok or not raw_text or #raw_text < 10 then return nil end
+    if not ok or not raw_text or #raw_text < 10 then return {} end
 
     local text_lower = raw_text:lower()
-    local match_pos  = text_lower:find(name_lower, 1, true)
-    if not match_pos and first_lower then
-        match_pos = text_lower:find(first_lower, 1, true)
-    end
+    local pos = 1
+    while true do
+        local match_pos = text_lower:find(name_lower, pos, true)
+        local match_len = #name_lower
+        if not match_pos and first_lower then
+            match_pos = text_lower:find(first_lower, pos, true)
+            match_len = #first_lower
+        end
+        if not match_pos then break end
 
-    if match_pos then
         local start_page = tonumber(toc_entry.page) or 1
         local end_page = next_toc_entry and tonumber(next_toc_entry.page) or (ui.document.getTotalPages and ui.document:getTotalPages()) or start_page
         if end_page < start_page then end_page = start_page end
@@ -866,13 +876,14 @@ function ChapterAnalyzer:findMentionsInChapter(ui, name, toc_entry, next_toc_ent
             est_page = math.floor(start_page + ((end_page - start_page) * fraction))
         end
 
-        return {
+        table.insert(chapter_mentions, {
             chapter = toc_entry.title or "???",
             page    = est_page,
             snippet = extractSentenceSnippet(raw_text, match_pos, 300),
-        }
+        })
+        pos = match_pos + match_len
     end
-    return nil
+    return chapter_mentions
 end
 
 return ChapterAnalyzer

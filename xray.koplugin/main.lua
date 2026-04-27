@@ -879,6 +879,10 @@ function XRayPlugin:closeAllMenus()
     if self.timeline_menu then UIManager:close(self.timeline_menu); self.timeline_menu = nil end
     if self.hf_menu then UIManager:close(self.hf_menu); self.hf_menu = nil end
     if self.xray_menu then UIManager:close(self.xray_menu); self.xray_menu = nil end
+    if self.ui then
+        local Event = require("ui/event")
+        self.ui:handleEvent(Event:new("Close"))
+    end
 end
 
 function XRayPlugin:showCharacters()
@@ -1037,18 +1041,25 @@ function XRayPlugin:updateMentionsForChapter(toc_entry, next_toc_entry)
             return self.chapter_analyzer:findMentionsInChapter(
                 self.ui, entity.name, toc_entry, next_toc_entry)
         end)
-        if ok and result then
+        if ok and result and #result > 0 then
             entity.mentions = entity.mentions or {}
-            local already = false
-            for _, m in ipairs(entity.mentions) do
-                if m.page == result.page then already = true; break end
+            for _, new_m in ipairs(result) do
+                local already = false
+                for _, m in ipairs(entity.mentions) do
+                    -- Simple duplicate check: same page and snippet start
+                    if m.page == new_m.page and m.snippet == new_m.snippet then
+                        already = true; break
+                    end
+                end
+                if not already then
+                    table.insert(entity.mentions, new_m)
+                    changed = true
+                end
             end
-            if not already then
-                table.insert(entity.mentions, result)
+            if changed then
                 table.sort(entity.mentions, function(a, b)
                     return (a.page or 0) < (b.page or 0)
                 end)
-                changed = true
             end
         end
         UIManager:scheduleIn(0, scanNext)
