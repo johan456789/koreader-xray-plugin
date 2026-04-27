@@ -805,13 +805,28 @@ function ChapterAnalyzer:findMentionsAcrossChapters(ui, name, toc, max_page)
         local text_lower = raw_text:lower()
         local pos = 1
         while true do
-            local match_pos = text_lower:find(name_lower, pos, true)
-            local match_len = #name_lower
-            if not match_pos and first_lower then
-                match_pos = text_lower:find(first_lower, pos, true)
+            local p1 = text_lower:find(name_lower, pos, true)
+            local p2 = first_lower and text_lower:find(first_lower, pos, true) or nil
+            
+            local match_pos = nil
+            local match_len = 0
+            if p1 and p2 then
+                if p1 <= p2 then
+                    match_pos = p1
+                    match_len = #name_lower
+                else
+                    match_pos = p2
+                    match_len = #first_lower
+                end
+            elseif p1 then
+                match_pos = p1
+                match_len = #name_lower
+            elseif p2 then
+                match_pos = p2
                 match_len = #first_lower
+            else
+                break
             end
-            if not match_pos then break end
 
             -- Interpolate the exact page based on character offset in the chapter
             local next_entry = toc[i+1]
@@ -857,13 +872,28 @@ function ChapterAnalyzer:findMentionsInChapter(ui, name, toc_entry, next_toc_ent
     local text_lower = raw_text:lower()
     local pos = 1
     while true do
-        local match_pos = text_lower:find(name_lower, pos, true)
-        local match_len = #name_lower
-        if not match_pos and first_lower then
-            match_pos = text_lower:find(first_lower, pos, true)
+        local p1 = text_lower:find(name_lower, pos, true)
+        local p2 = first_lower and text_lower:find(first_lower, pos, true) or nil
+        
+        local match_pos = nil
+        local match_len = 0
+        if p1 and p2 then
+            if p1 <= p2 then
+                match_pos = p1
+                match_len = #name_lower
+            else
+                match_pos = p2
+                match_len = #first_lower
+            end
+        elseif p1 then
+            match_pos = p1
+            match_len = #name_lower
+        elseif p2 then
+            match_pos = p2
             match_len = #first_lower
+        else
+            break
         end
-        if not match_pos then break end
 
         local start_page = tonumber(toc_entry.page) or 1
         local end_page = next_toc_entry and tonumber(next_toc_entry.page) or (ui.document.getTotalPages and ui.document:getTotalPages()) or start_page

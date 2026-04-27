@@ -883,7 +883,11 @@ function XRayPlugin:showCharacters()
         local name = char.name or "Unknown"
         local text = "• " .. name
         if char.description and #char.description > 0 then text = text .. "\n  " .. char.description:sub(1, 80) .. (#char.description > 80 and "..." or "") end
-        table.insert(items, { text = text, callback = function() self:showCharacterDetails(char) end })
+        table.insert(items, { 
+            text = text, 
+            keep_menu_open = true,
+            callback = function() self:showCharacterDetails(char) end 
+        })
     end
 
     -- Close any existing character menu before showing the updated one
@@ -898,7 +902,6 @@ function XRayPlugin:showCharacters()
         is_borderless = true,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
-        close_callback = function() self.char_menu = nil end,
     }
     UIManager:show(self.char_menu)
 end
@@ -1113,6 +1116,7 @@ function XRayPlugin:showMentionsMenu(name, mentions)
     -- Refresh button at the top
     table.insert(items, {
         text = "\xe2\x86\xba " .. (self.loc:t("mentions_refresh") or "Refresh Mentions"),
+        keep_menu_open = true,
         callback = function()
             local scanning_msg = InfoMessage:new{
                 text    = self.loc:t("mentions_refresh_started") or "Refreshing mentions...",
@@ -1163,6 +1167,7 @@ function XRayPlugin:showMentionsMenu(name, mentions)
         local pg     = m.page
         table.insert(items, {
             text = header .. snip,
+            keep_menu_open = true,
             callback = function()
                 self:closeAllMenus()
                 UIManager:nextTick(function()
@@ -1179,7 +1184,6 @@ function XRayPlugin:showMentionsMenu(name, mentions)
         is_borderless  = true,
         width          = Screen:getWidth(),
         height         = Screen:getHeight(),
-        close_callback = function() self.mentions_menu = nil end,
     }
     UIManager:show(self.mentions_menu)
 end
@@ -2172,6 +2176,7 @@ function XRayPlugin:showLocations()
             local captured_loc = loc
             table.insert(items, {
                 text = loc.name or "???",
+                keep_menu_open = true,
                 callback = function()
                     self:showLocationDetails(captured_loc)
                 end
@@ -2190,7 +2195,6 @@ function XRayPlugin:showLocations()
         is_borderless = true,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
-        close_callback = function() self.loc_menu = nil end,
     }
     UIManager:show(self.loc_menu)
 end
