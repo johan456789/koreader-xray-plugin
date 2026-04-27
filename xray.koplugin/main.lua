@@ -127,6 +127,7 @@ function XRayPlugin:onReaderReady()
     self.last_auto_chapter = nil
     self.chapters_fetched = {}
     self.bg_fetch_pending = false
+    self.last_mentions_chapter = nil
 
     -- Initialize language based on logic (auto, book, or manual)
     self:applyLanguageLogic()
@@ -139,6 +140,21 @@ function XRayPlugin:onReaderReady()
     -- Weekly silent update check
     UIManager:scheduleIn(10, function()
         self:checkWeeklyUpdate()
+    end)
+
+    -- Backfill mentions for old caches that don't have them yet
+    UIManager:scheduleIn(8, function()
+        if not self.mentions_scan_active then
+            local has_mentions = false
+            for _, c in ipairs(self.characters or {}) do
+                if c.mentions then has_mentions = true; break end
+            end
+            if not has_mentions and
+               ((self.characters and #self.characters > 0) or
+                (self.locations  and #self.locations  > 0)) then
+                self:buildMentionsInBackground(false)
+            end
+        end
     end)
 end
 
@@ -182,6 +198,28 @@ function XRayPlugin:onPageUpdate(pageno)
             self.chapters_fetched[unique_id] = true
         end
         return 
+    end
+
+    -- Incremental mentions update: fires on every new narrative chapter,
+    -- independent of the API auto-fetch cooldown logic below.
+    local mentions_chapter_id = chapter_title .. "_" .. tostring(chapter_page or 0)
+    if self.last_mentions_chapter ~= mentions_chapter_id then
+        self.last_mentions_chapter = mentions_chapter_id
+        if not self.mentions_scan_active and
+           ((self.characters and #self.characters > 0) or
+            (self.locations  and #self.locations  > 0)) then
+            local toc_entry_for_mentions = nil
+            for _, entry in ipairs(toc) do
+                if entry.title == chapter_title and entry.page == chapter_page then
+                    toc_entry_for_mentions = entry; break
+                end
+            end
+            if toc_entry_for_mentions then
+                UIManager:scheduleIn(4, function()
+                    self:updateMentionsForChapter(toc_entry_for_mentions)
+                end)
+            end
+        end
     end
 
     -- Check if it's already populated in the timeline data
@@ -866,16 +904,272 @@ function XRayPlugin:showCharacters()
 end
 
 function XRayPlugin:showCharacterDetails(character)
-    local lines = { 
-        (self.loc:t("label_name") or "NAME") .. ": " .. (character.name or "???"), 
-        (self.loc:t("label_role") or "ROLE") .. ": " .. (character.role or "---"), 
-        (self.loc:t("label_gender") or "GENDER") .. ": " .. (character.gender or "---"), 
-        (self.loc:t("label_occupation") or "OCCUPATION") .. ": " .. (character.occupation or "---"), 
-        "", 
-        (self.loc:t("label_description") or "DESCRIPTION") .. ":", 
-        character.description or "---" 
+    local lines = {
+        (self.loc:t("label_name") or "NAME") .. ": " .. (character.name or "???"),
+        (self.loc:t("label_role") or "ROLE") .. ": " .. (character.role or "---"),
+        (self.loc:t("label_gender") or "GENDER") .. ": " .. (character.gender or "---"),
+        (self.loc:t("label_occupation") or "OCCUPATION") .. ": " .. (character.occupation or "---"),
+        "",
+        (self.loc:t("label_description") or "DESCRIPTION") .. ":",
+        character.description or "---"
     }
-    UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n") })
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local detail_dialog
+    detail_dialog = ButtonDialog:new{
+        title = character.name or "???",
+        text  = table.concat(lines, "\n"),
+        buttons = {
+            {
+                {
+                    text = self.loc:t("find_mentions") or "Find Mentions",
+                    callback = function()
+                        UIManager:close(detail_dialog)
+                        self:showMentionsForEntity(character.name, character.mentions)
+                    end,
+                },
+                {
+                    text = self.loc:t("close") or "Close",
+                    callback = function() UIManager:close(detail_dialog) end,
+                },
+            },
+        },
+    }
+    UIManager:show(detail_dialog)
+end
+
+function XRayPlugin:showLocationDetails(loc_item)
+    local name = loc_item.name or "???"
+    local desc = loc_item.description or ""
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local loc_dialog
+    loc_dialog = ButtonDialog:new{
+        title = name,
+        text  = desc,
+        buttons = {
+            {
+                {
+                    text = self.loc:t("find_mentions") or "Find Mentions",
+                    callback = function()
+                        UIManager:close(loc_dialog)
+                        self:showMentionsForEntity(name, loc_item.mentions)
+                    end,
+                },
+                {
+                    text = self.loc:t("close") or "Close",
+                    callback = function() UIManager:close(loc_dialog) end,
+                },
+            },
+        },
+    }
+    UIManager:show(loc_dialog)
+end
+
+-- Run a full background mentions scan for all characters and locations.
+function XRayPlugin:buildMentionsInBackground(is_from_fetch)
+    if not self.ui or not self.ui.document then return end
+    if self.mentions_scan_active then return end
+
+    local toc = self.ui.document:getToc()
+    if not toc or #toc == 0 then return end
+
+    local spoiler_free = (self.ai_helper and self.ai_helper.settings
+        and self.ai_helper.settings.spoiler_setting or "spoiler_free") == "spoiler_free"
+    local max_page = spoiler_free and self.ui:getCurrentPage() or nil
+
+    for _, c in ipairs(self.characters or {}) do c.mentions = nil end
+    for _, l in ipairs(self.locations  or {}) do l.mentions = nil end
+
+    local queue = {}
+    for _, c in ipairs(self.characters or {}) do
+        if c.name then table.insert(queue, { entity = c, name = c.name }) end
+    end
+    for _, l in ipairs(self.locations or {}) do
+        if l.name then table.insert(queue, { entity = l, name = l.name }) end
+    end
+    if #queue == 0 then return end
+
+    self.mentions_scan_active = true
+    self:log("XRayPlugin: Starting full background mentions scan (" .. #queue .. " entities)")
+    if not self.chapter_analyzer then
+        self.chapter_analyzer = require("xray_chapteranalyzer"):new()
+    end
+
+    local idx = 1
+    local function scanNext()
+        if not self.ui or not self.ui.document then
+            self.mentions_scan_active = false; return
+        end
+        if idx > #queue then
+            self.mentions_scan_active = false
+            self:log("XRayPlugin: Background mentions scan complete")
+            self:saveMentionsToCache()
+            return
+        end
+        local item = queue[idx]; idx = idx + 1
+        local ok, result = pcall(function()
+            return self.chapter_analyzer:findMentionsAcrossChapters(
+                self.ui, item.name, toc, max_page)
+        end)
+        if ok and result then item.entity.mentions = result end
+        UIManager:scheduleIn(0, scanNext)
+    end
+    UIManager:scheduleIn(is_from_fetch and 3 or 1, scanNext)
+end
+
+-- Incrementally scan a single chapter and append new mentions found.
+function XRayPlugin:updateMentionsForChapter(toc_entry)
+    if not self.ui or not self.ui.document then return end
+    if self.mentions_scan_active then return end
+    if not toc_entry then return end
+    if not self.chapter_analyzer then
+        self.chapter_analyzer = require("xray_chapteranalyzer"):new()
+    end
+    local all_entities = {}
+    for _, c in ipairs(self.characters or {}) do
+        if c.name then table.insert(all_entities, c) end
+    end
+    for _, l in ipairs(self.locations or {}) do
+        if l.name then table.insert(all_entities, l) end
+    end
+    if #all_entities == 0 then return end
+
+    self:log("XRayPlugin: Incremental mentions scan for: " .. (toc_entry.title or "?"))
+    local idx = 1
+    local changed = false
+    local function scanNext()
+        if not self.ui or not self.ui.document then return end
+        if idx > #all_entities then
+            if changed then self:saveMentionsToCache() end
+            return
+        end
+        local entity = all_entities[idx]; idx = idx + 1
+        local ok, result = pcall(function()
+            return self.chapter_analyzer:findMentionsInChapter(
+                self.ui, entity.name, toc_entry)
+        end)
+        if ok and result then
+            entity.mentions = entity.mentions or {}
+            local already = false
+            for _, m in ipairs(entity.mentions) do
+                if m.page == result.page then already = true; break end
+            end
+            if not already then
+                table.insert(entity.mentions, result)
+                table.sort(entity.mentions, function(a, b)
+                    return (a.page or 0) < (b.page or 0)
+                end)
+                changed = true
+            end
+        end
+        UIManager:scheduleIn(0, scanNext)
+    end
+    UIManager:scheduleIn(0, scanNext)
+end
+
+-- Save characters/locations (with mentions) back to the cache file.
+function XRayPlugin:saveMentionsToCache()
+    if not self.cache_manager then
+        self.cache_manager = require("xray_cachemanager"):new()
+    end
+    if not self.ui or not self.ui.document then return end
+    local updated = {
+        book_title         = self.book_data and self.book_data.book_title,
+        author             = self.book_data and self.book_data.author,
+        characters         = self.characters,
+        historical_figures = self.historical_figures,
+        locations          = self.locations,
+        timeline           = self.timeline,
+        author_info        = self.author_info,
+        last_fetch_page    = self.book_data and self.book_data.last_fetch_page,
+    }
+    self.cache_manager:saveCache(self.ui.document.file, updated)
+    self:log("XRayPlugin: Mentions saved to cache")
+end
+
+-- Show the Mentions view. Reads from cache (fast path) or scans live (fallback).
+function XRayPlugin:showMentionsForEntity(name, mentions)
+    if mentions then
+        self:showMentionsMenu(name, mentions)
+        return
+    end
+    if not self.ui or not self.ui.document then return end
+    local scanning_msg = InfoMessage:new{
+        text    = (self.loc:t("mentions_scanning") or "Scanning for mentions of %s..."):format(name),
+        timeout = 60,
+    }
+    UIManager:show(scanning_msg)
+    UIManager:scheduleIn(0, function()
+        if not self.chapter_analyzer then
+            self.chapter_analyzer = require("xray_chapteranalyzer"):new()
+        end
+        local toc = self.ui.document:getToc() or {}
+        local spoiler_free = (self.ai_helper and self.ai_helper.settings
+            and self.ai_helper.settings.spoiler_setting or "spoiler_free") == "spoiler_free"
+        local max_page = spoiler_free and self.ui:getCurrentPage() or nil
+        local ok, result = pcall(function()
+            return self.chapter_analyzer:findMentionsAcrossChapters(
+                self.ui, name, toc, max_page)
+        end)
+        UIManager:close(scanning_msg)
+        self:showMentionsMenu(name, (ok and result) or {})
+    end)
+end
+
+function XRayPlugin:showMentionsMenu(name, mentions)
+    if not mentions or #mentions == 0 then
+        UIManager:show(InfoMessage:new{
+            text    = (self.loc:t("mentions_none") or "No mentions found for '%s' yet."):format(name),
+            timeout = 4,
+        })
+        return
+    end
+
+    local items = {}
+    -- Refresh button at the top
+    table.insert(items, {
+        text = "\xE2\x86\xBA " .. (self.loc:t("mentions_refresh") or "Refresh Mentions"),
+        callback = function()
+            if self.mentions_menu then
+                UIManager:close(self.mentions_menu)
+                self.mentions_menu = nil
+            end
+            self:buildMentionsInBackground(false)
+            UIManager:show(InfoMessage:new{
+                text    = self.loc:t("mentions_refresh_started") or "Refreshing mentions in background...",
+                timeout = 3,
+            })
+        end,
+        separator = true,
+    })
+
+    for _, m in ipairs(mentions) do
+        local header = "p." .. tostring(m.page) .. " \xE2\x80\x94 " .. (m.chapter or "")
+        local snip   = (m.snippet and m.snippet ~= "") and ("\n" .. m.snippet) or ""
+        local pg     = m.page
+        table.insert(items, {
+            text = header .. snip,
+            callback = function()
+                if self.mentions_menu then
+                    UIManager:close(self.mentions_menu)
+                    self.mentions_menu = nil
+                end
+                UIManager:nextTick(function()
+                    local Event = require("ui/event")
+                    self.ui:handleEvent(Event:new("GotoPage", pg))
+                end)
+            end,
+        })
+    end
+
+    self.mentions_menu = Menu:new{
+        title          = (self.loc:t("mentions_title") or "Mentions: %s"):format(name),
+        item_table     = items,
+        is_borderless  = true,
+        width          = Screen:getWidth(),
+        height         = Screen:getHeight(),
+        close_callback = function() self.mentions_menu = nil end,
+    }
+    UIManager:show(self.mentions_menu)
 end
 
 function XRayPlugin:fetchFromAI()
@@ -1635,6 +1929,11 @@ function XRayPlugin:finalizeXRayData(final_book_data, title, author, book_text, 
         end }}} }
         UIManager:show(success_dialog)
     end
+
+    -- Kick off background mentions scan for newly-fetched/merged data
+    UIManager:scheduleIn(0, function()
+        self:buildMentionsInBackground(true)
+    end)
 end
 
 function XRayPlugin:fetchMoreCharacters()
@@ -1858,16 +2157,12 @@ function XRayPlugin:showLocations()
     local items = {}
     for _, loc in ipairs(self.locations) do 
         if type(loc) == "table" then
-            local name = loc.name or "???"
-            local desc = loc.description or ""
-            table.insert(items, { 
-                text = name, 
-                callback = function() 
-                    UIManager:show(InfoMessage:new{ 
-                        text = name .. "\n\n" .. desc, 
-                        timeout = 10 
-                    }) 
-                end 
+            local captured_loc = loc
+            table.insert(items, {
+                text = loc.name or "???",
+                callback = function()
+                    self:showLocationDetails(captured_loc)
+                end
             })
         end
     end

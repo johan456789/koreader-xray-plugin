@@ -392,3 +392,21 @@ msgstr "Anında arama yapmak için sözlük ve seçim menülerine bir 'X-Ray' d�
 msgid "yes"
 msgstr "Evet"
 
+
+msgid "find_mentions"
+msgstr "Sozleri bul"
+
+msgid "mentions_scanning"
+msgstr "%s icin sozler aranıyor..."
+
+msgid "mentions_none"
+msgstr "'%s' icin henuz soz bulunamadı."
+
+msgid "mentions_title"
+msgstr "Sozler: %s"
+
+msgid "mentions_refresh"
+msgstr "Sozleri yenile"
+
+msgid "mentions_refresh_started"
+msgstr "Sozler arka planda yenileniyor..."

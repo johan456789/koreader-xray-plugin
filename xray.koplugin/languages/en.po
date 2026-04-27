@@ -392,3 +392,21 @@ msgstr "Adds an 'X-Ray' button to dictionary and selection menus for instant loo
 msgid "yes"
 msgstr "Yes"
 
+msgid "find_mentions"
+msgstr "Find Mentions"
+
+msgid "mentions_scanning"
+msgstr "Scanning for mentions of %s..."
+
+msgid "mentions_none"
+msgstr "No mentions found for '%s' yet."
+
+msgid "mentions_title"
+msgstr "Mentions: %s"
+
+msgid "mentions_refresh"
+msgstr "Refresh Mentions"
+
+msgid "mentions_refresh_started"
+msgstr "Refreshing mentions in background..."
+

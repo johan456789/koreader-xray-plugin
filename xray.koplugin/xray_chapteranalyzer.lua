@@ -746,4 +746,112 @@ function ChapterAnalyzer:countMentions(text, name)
     return count
 end
 
+-- Extract a sentence-aware snippet around a match position in raw text.
+-- Returns: up to one sentence before + the match sentence + one sentence after,
+-- capped at max_len characters.
+local function extractSentenceSnippet(text, match_pos, max_len)
+    max_len = max_len or 300
+    if not text or not match_pos then return "" end
+
+    local function prevBoundary(t, pos)
+        for i = pos, 1, -1 do
+            local c = t:sub(i, i)
+            if c == "." or c == "!" or c == "?" or c == "\n" then return i + 1 end
+        end
+        return 1
+    end
+
+    local function nextBoundary(t, pos)
+        for i = pos, #t do
+            local c = t:sub(i, i)
+            if c == "." or c == "!" or c == "?" or c == "\n" then return i end
+        end
+        return #t
+    end
+
+    local sent_start = prevBoundary(text, match_pos - 1)
+    local sent_end   = nextBoundary(text, match_pos)
+    local prev_start = sent_start > 2 and prevBoundary(text, sent_start - 2) or sent_start
+    local next_end   = sent_end < #text and nextBoundary(text, sent_end + 1) or sent_end
+
+    local snippet = text:sub(prev_start, next_end):gsub("%s+", " ")
+                        :gsub("^%s+", ""):gsub("%s+$", "")
+    if #snippet > max_len then
+        snippet = snippet:sub(1, max_len):gsub("%s%S*$", "") .. "…"
+    end
+    return snippet
+end
+
+-- Scan every chapter in `toc` for occurrences of `name`.
+-- max_page: if non-nil, skips chapters whose start page > max_page (spoiler-free).
+-- Returns a list of { chapter, page, snippet } ordered by page.
+function ChapterAnalyzer:findMentionsAcrossChapters(ui, name, toc, max_page)
+    if not ui or not ui.document or not name or not toc or #toc == 0 then return {} end
+
+    local name_lower  = name:lower()
+    local first_name  = name:match("^(%S+)")
+    local first_lower = (first_name and #first_name > 3) and first_name:lower() or nil
+    local mentions    = {}
+
+    for i, entry in ipairs(toc) do
+        local page = tonumber(entry.page)
+        if not page then goto next_ch end
+        if max_page and page > max_page then break end
+        if not entry.xpointer then goto next_ch end
+
+        local ok, raw_text = pcall(function()
+            return ui.document:getTextFromXPointer(entry.xpointer) or ""
+        end)
+        if not ok or not raw_text or #raw_text < 10 then goto next_ch end
+
+        local text_lower = raw_text:lower()
+        local match_pos  = text_lower:find(name_lower, 1, true)
+        if not match_pos and first_lower then
+            match_pos = text_lower:find(first_lower, 1, true)
+        end
+
+        if match_pos then
+            table.insert(mentions, {
+                chapter = entry.title or ("Chapter " .. i),
+                page    = page,
+                snippet = extractSentenceSnippet(raw_text, match_pos, 300),
+            })
+        end
+        ::next_ch::
+    end
+
+    return mentions
+end
+
+-- Scan a single TOC entry for occurrences of `name`.
+-- Returns a { chapter, page, snippet } table, or nil if not found.
+function ChapterAnalyzer:findMentionsInChapter(ui, name, toc_entry)
+    if not ui or not ui.document or not name or not toc_entry then return nil end
+    if not toc_entry.xpointer then return nil end
+
+    local name_lower  = name:lower()
+    local first_name  = name:match("^(%S+)")
+    local first_lower = (first_name and #first_name > 3) and first_name:lower() or nil
+
+    local ok, raw_text = pcall(function()
+        return ui.document:getTextFromXPointer(toc_entry.xpointer) or ""
+    end)
+    if not ok or not raw_text or #raw_text < 10 then return nil end
+
+    local text_lower = raw_text:lower()
+    local match_pos  = text_lower:find(name_lower, 1, true)
+    if not match_pos and first_lower then
+        match_pos = text_lower:find(first_lower, 1, true)
+    end
+
+    if match_pos then
+        return {
+            chapter = toc_entry.title or "???",
+            page    = tonumber(toc_entry.page),
+            snippet = extractSentenceSnippet(raw_text, match_pos, 300),
+        }
+    end
+    return nil
+end
+
 return ChapterAnalyzer

@@ -395,3 +395,21 @@ msgstr "Додає кнопку 'X-Ray' у меню словника та вид
 msgid "yes"
 msgstr "Так"
 
+
+msgid "find_mentions"
+msgstr "Знайти згадки"
+
+msgid "mentions_scanning"
+msgstr "Пошук згадок %s..."
+
+msgid "mentions_none"
+msgstr "Згадок про «%s» поки не знайдено."
+
+msgid "mentions_title"
+msgstr "Згадки: %s"
+
+msgid "mentions_refresh"
+msgstr "Оновити згадки"
+
+msgid "mentions_refresh_started"
+msgstr "Оновлення згадок у фоновому режимі..."

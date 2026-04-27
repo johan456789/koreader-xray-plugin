@@ -117,9 +117,7 @@ function LookupManager:showResult(item, item_type)
         local bio  = item.biography or "No biography available."
         UIManager:show(InfoMessage:new{ text = name .. "\n\n" .. bio, timeout = 15 })
     elseif item_type == "location" then
-        local name = item.name or "???"
-        local desc = item.description or ""
-        UIManager:show(InfoMessage:new{ text = name .. "\n\n" .. desc, timeout = 10 })
+        self.plugin:showLocationDetails(item)
     end
 end
 

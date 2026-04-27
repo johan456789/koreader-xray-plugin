@@ -392,3 +392,21 @@ msgstr "Fügt eine 'X-Ray'-Schaltfläche zu Wörterbuch- und Auswahlmenüs für 
 msgid "yes"
 msgstr "Yes"
 
+
+msgid "find_mentions"
+msgstr "Erwahnungen finden"
+
+msgid "mentions_scanning"
+msgstr "Suche nach Erwahnungen von %s..."
+
+msgid "mentions_none"
+msgstr "Noch keine Erwahnungen fur '%s' gefunden."
+
+msgid "mentions_title"
+msgstr "Erwahnungen: %s"
+
+msgid "mentions_refresh"
+msgstr "Erwahnungen aktualisieren"
+
+msgid "mentions_refresh_started"
+msgstr "Erwahnungen werden im Hintergrund aktualisiert..."

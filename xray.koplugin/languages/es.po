@@ -392,3 +392,21 @@ msgstr "Añade un botón 'X-Ray' a los menús de diccionario y selección para c
 msgid "yes"
 msgstr "Sí"
 
+
+msgid "find_mentions"
+msgstr "Buscar menciones"
+
+msgid "mentions_scanning"
+msgstr "Buscando menciones de %s..."
+
+msgid "mentions_none"
+msgstr "Aun no se encontraron menciones de '%s'."
+
+msgid "mentions_title"
+msgstr "Menciones: %s"
+
+msgid "mentions_refresh"
+msgstr "Actualizar menciones"
+
+msgid "mentions_refresh_started"
+msgstr "Actualizando menciones en segundo plano..."

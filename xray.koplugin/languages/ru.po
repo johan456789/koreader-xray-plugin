@@ -392,3 +392,21 @@ msgstr "Добавляет кнопку 'X-Ray' в меню словаря и в
 msgid "yes"
 msgstr "Да"
 
+
+msgid "find_mentions"
+msgstr "Найти упоминания"
+
+msgid "mentions_scanning"
+msgstr "Поиск упоминаний %s..."
+
+msgid "mentions_none"
+msgstr "Упоминания «%s» пока не найдены."
+
+msgid "mentions_title"
+msgstr "Упоминания: %s"
+
+msgid "mentions_refresh"
+msgstr "Обновить упоминания"
+
+msgid "mentions_refresh_started"
+msgstr "Обновление упоминаний в фоновом режиме..."
