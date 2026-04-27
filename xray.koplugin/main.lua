@@ -879,9 +879,10 @@ function XRayPlugin:closeAllMenus()
     if self.timeline_menu then UIManager:close(self.timeline_menu); self.timeline_menu = nil end
     if self.hf_menu then UIManager:close(self.hf_menu); self.hf_menu = nil end
     if self.xray_menu then UIManager:close(self.xray_menu); self.xray_menu = nil end
-    if self.ui then
-        local Event = require("ui/event")
-        self.ui:handleEvent(Event:new("Close"))
+    
+    -- Safe way to close the native reader menu if it's still open behind us
+    if self.ui and self.ui.menu and self.ui.menu.onClose then
+        pcall(function() self.ui.menu:onClose() end)
     end
 end
 
