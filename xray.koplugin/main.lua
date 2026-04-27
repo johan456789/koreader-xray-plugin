@@ -136,7 +136,12 @@ function XRayPlugin:onDictButtonsReady(dict_popup, dict_buttons)
         callback = function()
             -- Close the native dictionary popup immediately so it doesn't linger
             if dict_popup then pcall(function() UIManager:close(dict_popup) end) end
-            self.lookup_manager:handleLookup(dict_popup.word, dict_popup.pos0, dict_popup.pos1)
+            
+            -- Multi-word selections often store text in .text or .selection_text instead of .word
+            local text = dict_popup and (dict_popup.word or dict_popup.text or dict_popup.selection_text)
+            if text then
+                self.lookup_manager:handleLookup(text, dict_popup.pos0, dict_popup.pos1)
+            end
         end,
     }
 

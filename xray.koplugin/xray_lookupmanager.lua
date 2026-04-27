@@ -16,7 +16,7 @@ end
 
 -- Clean and normalize text for comparison
 function LookupManager:normalize(text)
-    if not text then return "" end
+    if type(text) ~= "string" or text == "" then return "" end
     -- Remove non-alphanumeric characters from start/end and lowercase
     local clean = text:gsub("^[^%w]+", ""):gsub("[^%w]+$", ""):lower()
     return clean
@@ -171,7 +171,7 @@ end
 -- Handle the UI part of the lookup, with a disambiguation picker for multiple hits
 function LookupManager:handleLookup(text, pos0, pos1)
     logger.info("XRayPlugin: handleLookup called for:", text)
-    if not text or text == "" then return end
+    if type(text) ~= "string" or text == "" then return end
 
     local all = self:lookupAll(text)
 
