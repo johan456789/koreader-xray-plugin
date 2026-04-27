@@ -747,7 +747,7 @@ function ChapterAnalyzer:countMentions(text, name)
 end
 
 -- Extract a sentence-aware snippet around a match position in raw text.
--- Returns: up to one sentence before + the match sentence + one sentence after,
+-- Returns: ONLY the sentence containing the match,
 -- capped at max_len characters.
 local function extractSentenceSnippet(text, match_pos, max_len)
     max_len = max_len or 300
@@ -771,10 +771,8 @@ local function extractSentenceSnippet(text, match_pos, max_len)
 
     local sent_start = prevBoundary(text, match_pos - 1)
     local sent_end   = nextBoundary(text, match_pos)
-    local prev_start = sent_start > 2 and prevBoundary(text, sent_start - 2) or sent_start
-    local next_end   = sent_end < #text and nextBoundary(text, sent_end + 1) or sent_end
 
-    local snippet = text:sub(prev_start, next_end):gsub("%s+", " ")
+    local snippet = text:sub(sent_start, sent_end):gsub("%s+", " ")
                         :gsub("^%s+", ""):gsub("%s+$", "")
     if #snippet > max_len then
         snippet = snippet:sub(1, max_len):gsub("%s%S*$", "") .. "…"
@@ -794,9 +792,9 @@ function ChapterAnalyzer:findMentionsAcrossChapters(ui, name, toc, max_page)
     local mentions    = {}
 
     for i, entry in ipairs(toc) do
-        local page = tonumber(entry.page)
-        if not page then goto next_ch end
-        if max_page and page > max_page then break end
+        local start_page = tonumber(entry.page)
+        if not start_page then goto next_ch end
+        if max_page and start_page > max_page then break end
         if not entry.xpointer then goto next_ch end
 
         local ok, raw_text = pcall(function()
@@ -811,9 +809,21 @@ function ChapterAnalyzer:findMentionsAcrossChapters(ui, name, toc, max_page)
         end
 
         if match_pos then
+            -- Interpolate the exact page based on character offset in the chapter
+            local next_entry = toc[i+1]
+            local end_page = next_entry and tonumber(next_entry.page) or (ui.document.getTotalPages and ui.document:getTotalPages()) or start_page
+            if end_page < start_page then end_page = start_page end
+            
+            local est_page = start_page
+            local total_chars = #raw_text
+            if total_chars > 0 and end_page > start_page then
+                local fraction = match_pos / total_chars
+                est_page = math.floor(start_page + ((end_page - start_page) * fraction))
+            end
+
             table.insert(mentions, {
                 chapter = entry.title or ("Chapter " .. i),
-                page    = page,
+                page    = est_page,
                 snippet = extractSentenceSnippet(raw_text, match_pos, 300),
             })
         end
@@ -825,7 +835,7 @@ end
 
 -- Scan a single TOC entry for occurrences of `name`.
 -- Returns a { chapter, page, snippet } table, or nil if not found.
-function ChapterAnalyzer:findMentionsInChapter(ui, name, toc_entry)
+function ChapterAnalyzer:findMentionsInChapter(ui, name, toc_entry, next_toc_entry)
     if not ui or not ui.document or not name or not toc_entry then return nil end
     if not toc_entry.xpointer then return nil end
 
@@ -845,9 +855,20 @@ function ChapterAnalyzer:findMentionsInChapter(ui, name, toc_entry)
     end
 
     if match_pos then
+        local start_page = tonumber(toc_entry.page) or 1
+        local end_page = next_toc_entry and tonumber(next_toc_entry.page) or (ui.document.getTotalPages and ui.document:getTotalPages()) or start_page
+        if end_page < start_page then end_page = start_page end
+        
+        local est_page = start_page
+        local total_chars = #raw_text
+        if total_chars > 0 and end_page > start_page then
+            local fraction = match_pos / total_chars
+            est_page = math.floor(start_page + ((end_page - start_page) * fraction))
+        end
+
         return {
             chapter = toc_entry.title or "???",
-            page    = tonumber(toc_entry.page),
+            page    = est_page,
             snippet = extractSentenceSnippet(raw_text, match_pos, 300),
         }
     end

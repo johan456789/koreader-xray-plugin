@@ -209,14 +209,17 @@ function XRayPlugin:onPageUpdate(pageno)
            ((self.characters and #self.characters > 0) or
             (self.locations  and #self.locations  > 0)) then
             local toc_entry_for_mentions = nil
-            for _, entry in ipairs(toc) do
+            local next_toc_entry = nil
+            for i, entry in ipairs(toc) do
                 if entry.title == chapter_title and entry.page == chapter_page then
-                    toc_entry_for_mentions = entry; break
+                    toc_entry_for_mentions = entry
+                    next_toc_entry = toc[i+1]
+                    break
                 end
             end
             if toc_entry_for_mentions then
                 UIManager:scheduleIn(4, function()
-                    self:updateMentionsForChapter(toc_entry_for_mentions)
+                    self:updateMentionsForChapter(toc_entry_for_mentions, next_toc_entry)
                 end)
             end
         end
@@ -869,6 +872,16 @@ function XRayPlugin:checkBookLanguageMatch()
     UIManager:show(mismatch_dialog)
 end
 
+function XRayPlugin:closeAllMenus()
+    if self.mentions_menu then UIManager:close(self.mentions_menu); self.mentions_menu = nil end
+    if self.char_menu then UIManager:close(self.char_menu); self.char_menu = nil end
+    if self.loc_menu then UIManager:close(self.loc_menu); self.loc_menu = nil end
+    if self.timeline_menu then UIManager:close(self.timeline_menu); self.timeline_menu = nil end
+    if self.hf_menu then UIManager:close(self.hf_menu); self.hf_menu = nil end
+    if self.xray_menu then UIManager:close(self.xray_menu); self.xray_menu = nil end
+    if self.ui and self.ui.onClose then self.ui:onClose() end
+end
+
 function XRayPlugin:showCharacters()
     if not self.characters or #self.characters == 0 then
         UIManager:show(InfoMessage:new{ text = self.loc:t("no_character_data"), timeout = 3 })
@@ -913,26 +926,15 @@ function XRayPlugin:showCharacterDetails(character)
         (self.loc:t("label_description") or "DESCRIPTION") .. ":",
         character.description or "---"
     }
-    local ButtonDialog = require("ui/widget/buttondialog")
+    local ConfirmBox = require("ui/widget/confirmbox")
     local detail_dialog
-    detail_dialog = ButtonDialog:new{
-        title = character.name or "???",
-        text  = table.concat(lines, "\n"),
-        buttons = {
-            {
-                {
-                    text = self.loc:t("find_mentions") or "Find Mentions",
-                    callback = function()
-                        UIManager:close(detail_dialog)
-                        self:showMentionsForEntity(character.name, character.mentions)
-                    end,
-                },
-                {
-                    text = self.loc:t("close") or "Close",
-                    callback = function() UIManager:close(detail_dialog) end,
-                },
-            },
-        },
+    detail_dialog = ConfirmBox:new{
+        text = table.concat(lines, "\n"),
+        ok_text = self.loc:t("find_mentions") or "Find Mentions",
+        cancel_text = self.loc:t("close") or "Close",
+        ok_callback = function()
+            self:showMentionsForEntity(character.name, character.mentions)
+        end,
     }
     UIManager:show(detail_dialog)
 end
@@ -940,26 +942,15 @@ end
 function XRayPlugin:showLocationDetails(loc_item)
     local name = loc_item.name or "???"
     local desc = loc_item.description or ""
-    local ButtonDialog = require("ui/widget/buttondialog")
+    local ConfirmBox = require("ui/widget/confirmbox")
     local loc_dialog
-    loc_dialog = ButtonDialog:new{
-        title = name,
-        text  = desc,
-        buttons = {
-            {
-                {
-                    text = self.loc:t("find_mentions") or "Find Mentions",
-                    callback = function()
-                        UIManager:close(loc_dialog)
-                        self:showMentionsForEntity(name, loc_item.mentions)
-                    end,
-                },
-                {
-                    text = self.loc:t("close") or "Close",
-                    callback = function() UIManager:close(loc_dialog) end,
-                },
-            },
-        },
+    loc_dialog = ConfirmBox:new{
+        text = name .. "\n\n" .. desc,
+        ok_text = self.loc:t("find_mentions") or "Find Mentions",
+        cancel_text = self.loc:t("close") or "Close",
+        ok_callback = function()
+            self:showMentionsForEntity(name, loc_item.mentions)
+        end,
     }
     UIManager:show(loc_dialog)
 end
@@ -1017,7 +1008,7 @@ function XRayPlugin:buildMentionsInBackground(is_from_fetch)
 end
 
 -- Incrementally scan a single chapter and append new mentions found.
-function XRayPlugin:updateMentionsForChapter(toc_entry)
+function XRayPlugin:updateMentionsForChapter(toc_entry, next_toc_entry)
     if not self.ui or not self.ui.document then return end
     if self.mentions_scan_active then return end
     if not toc_entry then return end
@@ -1045,7 +1036,7 @@ function XRayPlugin:updateMentionsForChapter(toc_entry)
         local entity = all_entities[idx]; idx = idx + 1
         local ok, result = pcall(function()
             return self.chapter_analyzer:findMentionsInChapter(
-                self.ui, entity.name, toc_entry)
+                self.ui, entity.name, toc_entry, next_toc_entry)
         end)
         if ok and result then
             entity.mentions = entity.mentions or {}
@@ -1149,10 +1140,7 @@ function XRayPlugin:showMentionsMenu(name, mentions)
         table.insert(items, {
             text = header .. snip,
             callback = function()
-                if self.mentions_menu then
-                    UIManager:close(self.mentions_menu)
-                    self.mentions_menu = nil
-                end
+                self:closeAllMenus()
                 UIManager:nextTick(function()
                     local Event = require("ui/event")
                     self.ui:handleEvent(Event:new("GotoPage", pg))
@@ -2172,7 +2160,8 @@ function XRayPlugin:showLocations()
         return
     end
     
-    UIManager:show(Menu:new{ title = self.loc:t("menu_locations"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() })
+    self.loc_menu = Menu:new{ title = self.loc:t("menu_locations"), item_table = items, is_borderless = true, width = Screen:getWidth(), height = Screen:getHeight() }
+    UIManager:show(self.loc_menu)
 end
 
 function XRayPlugin:showAbout()
