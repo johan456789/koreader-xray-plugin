@@ -879,7 +879,9 @@ function XRayPlugin:closeAllMenus()
     if self.timeline_menu then UIManager:close(self.timeline_menu); self.timeline_menu = nil end
     if self.hf_menu then UIManager:close(self.hf_menu); self.hf_menu = nil end
     if self.xray_menu then UIManager:close(self.xray_menu); self.xray_menu = nil end
-    if self.ui and self.ui.onClose then self.ui:onClose() end
+    if self.ui and self.ui.onClose then
+        pcall(function() self.ui:onClose() end)
+    end
 end
 
 function XRayPlugin:showCharacters()
@@ -930,6 +932,7 @@ function XRayPlugin:showCharacterDetails(character)
     local detail_dialog
     detail_dialog = ConfirmBox:new{
         text = table.concat(lines, "\n"),
+        icon = "person",
         ok_text = self.loc:t("find_mentions") or "Find Mentions",
         cancel_text = self.loc:t("close") or "Close",
         ok_callback = function()
@@ -946,6 +949,7 @@ function XRayPlugin:showLocationDetails(loc_item)
     local loc_dialog
     loc_dialog = ConfirmBox:new{
         text = name .. "\n\n" .. desc,
+        icon = "location",
         ok_text = self.loc:t("find_mentions") or "Find Mentions",
         cancel_text = self.loc:t("close") or "Close",
         ok_callback = function()
@@ -1118,17 +1122,47 @@ function XRayPlugin:showMentionsMenu(name, mentions)
     local items = {}
     -- Refresh button at the top
     table.insert(items, {
-        text = "\xE2\x86\xBA " .. (self.loc:t("mentions_refresh") or "Refresh Mentions"),
+        text = "\xe2\x86\xba " .. (self.loc:t("mentions_refresh") or "Refresh Mentions"),
         callback = function()
-            if self.mentions_menu then
-                UIManager:close(self.mentions_menu)
-                self.mentions_menu = nil
-            end
-            self:buildMentionsInBackground(false)
-            UIManager:show(InfoMessage:new{
-                text    = self.loc:t("mentions_refresh_started") or "Refreshing mentions in background...",
-                timeout = 3,
-            })
+            local scanning_msg = InfoMessage:new{
+                text    = self.loc:t("mentions_refresh_started") or "Refreshing mentions...",
+                timeout = 60,
+            }
+            UIManager:show(scanning_msg)
+            UIManager:scheduleIn(0.1, function()
+                if not self.chapter_analyzer then
+                    self.chapter_analyzer = require("xray_chapteranalyzer"):new()
+                end
+                local toc = self.ui.document:getToc() or {}
+                local spoiler_free = (self.ai_helper and self.ai_helper.settings
+                    and self.ai_helper.settings.spoiler_setting or "spoiler_free") == "spoiler_free"
+                local max_page = spoiler_free and self.ui:getCurrentPage() or nil
+                local ok, result = pcall(function()
+                    return self.chapter_analyzer:findMentionsAcrossChapters(
+                        self.ui, name, toc, max_page)
+                end)
+                UIManager:close(scanning_msg)
+                if ok and result then
+                    -- Update entity in local tables
+                    local found = false
+                    for _, c in ipairs(self.characters or {}) do
+                        if c.name == name then c.mentions = result; found = true; break end
+                    end
+                    if not found then
+                        for _, l in ipairs(self.locations or {}) do
+                            if l.name == name then l.mentions = result; break end
+                        end
+                    end
+                    self:saveMentionsToCache()
+                    
+                    -- Close old menu and re-open to refresh the list
+                    if self.mentions_menu then
+                        UIManager:close(self.mentions_menu)
+                        self.mentions_menu = nil
+                    end
+                    self:showMentionsMenu(name, result)
+                end
+            end)
         end,
         separator = true,
     })
