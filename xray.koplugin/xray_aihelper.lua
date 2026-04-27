@@ -38,6 +38,64 @@ function AIHelper:log(message)
     XRayLogger:log(message)
 end
 
+-- Strip invalid UTF-8 sequences and disallowed control bytes from a string.
+-- Byte-based string.sub() throughout the plugin can slice multi-byte UTF-8
+-- characters mid-sequence, leaving an invalid prefix/suffix that makes the
+-- JSON request body non-parseable to strict APIs like OpenAI's.
+local function sanitize_utf8(s)
+    if not s or s == "" then return s or "" end
+    local out, i, len = {}, 1, #s
+    while i <= len do
+        local b = s:byte(i)
+        if b < 0x80 then
+            -- ASCII: keep printable + tab/LF/CR, replace other C0 controls with space
+            if b >= 0x20 or b == 0x09 or b == 0x0A or b == 0x0D then
+                out[#out+1] = string.char(b)
+            else
+                out[#out+1] = " "
+            end
+            i = i + 1
+        elseif b < 0xC2 then
+            -- Stray continuation byte (0x80-0xBF) or overlong start (0xC0-0xC1): drop
+            i = i + 1
+        elseif b < 0xE0 then
+            -- 2-byte sequence
+            local b2 = s:byte(i + 1)
+            if b2 and b2 >= 0x80 and b2 < 0xC0 then
+                out[#out+1] = s:sub(i, i + 1)
+                i = i + 2
+            else
+                i = i + 1
+            end
+        elseif b < 0xF0 then
+            -- 3-byte sequence
+            local b2, b3 = s:byte(i + 1), s:byte(i + 2)
+            if b2 and b3 and b2 >= 0x80 and b2 < 0xC0 and b3 >= 0x80 and b3 < 0xC0 then
+                out[#out+1] = s:sub(i, i + 2)
+                i = i + 3
+            else
+                i = i + 1
+            end
+        elseif b < 0xF5 then
+            -- 4-byte sequence
+            local b2, b3, b4 = s:byte(i + 1), s:byte(i + 2), s:byte(i + 3)
+            if b2 and b3 and b4
+                and b2 >= 0x80 and b2 < 0xC0
+                and b3 >= 0x80 and b3 < 0xC0
+                and b4 >= 0x80 and b4 < 0xC0 then
+                out[#out+1] = s:sub(i, i + 3)
+                i = i + 4
+            else
+                i = i + 1
+            end
+        else
+            -- Invalid leading byte (0xF5-0xFF)
+            i = i + 1
+        end
+    end
+    return table.concat(out)
+end
+
 function AIHelper:setTrapWidget(trap_widget) self.trap_widget = trap_widget end
 function AIHelper:resetTrapWidget() self.trap_widget = nil end
 
@@ -557,7 +615,7 @@ function AIHelper:loadSettings()
             end
             
             -- Only auto-set if it's one of our supported languages
-            local supported = { en=1, de=1, fr=1, ru=1, zh_CN=1, tr=1, pt_br=1, es=1 }
+            local supported = { en=1, de=1, fr=1, ru=1, zh_CN=1, tr=1, pt_br=1, es=1, uk=1 }
             if supported[lang] then
                 settings.language = lang
                 migrated = true
@@ -721,6 +779,14 @@ function AIHelper:createPrompt(title, author, context, section_name, targeted_wo
     end
     if not success then final_prompt = string.format("Extract %s data.", section_name) end
     if #extra_context > 0 then final_prompt = final_prompt .. extra_context end
+
+    -- Strip invalid UTF-8 introduced by byte-based truncation of multi-byte
+    -- text (Cyrillic, CJK, curly quotes, etc.) before the prompt is JSON-encoded.
+    local before_len = #final_prompt
+    final_prompt = sanitize_utf8(final_prompt)
+    if #final_prompt ~= before_len then
+        self:log(string.format("AIHelper: sanitize_utf8 stripped %d invalid byte(s) from prompt", before_len - #final_prompt))
+    end
     return final_prompt
 end
 
