@@ -440,3 +440,20 @@ msgstr "Fügt eine 'X-Ray'-Schaltfläche zu Wörterbuch- und Auswahlmenüs für 
 msgid "yes"
 msgstr "Yes"
 
+msgid "menu_reasoning_effort"
+msgstr "GPT Reasoning-Aufwand"
+
+msgid "reasoning_low"
+msgstr "Niedrig"
+
+msgid "reasoning_medium"
+msgstr "Mittel"
+
+msgid "reasoning_high"
+msgstr "Hoch"
+
+msgid "reasoning_xhigh"
+msgstr "Extra Hoch (X-High)"
+
+msgid "label_reasoning"
+msgstr "KI-DENKPROZESS"

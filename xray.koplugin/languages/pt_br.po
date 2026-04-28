@@ -440,3 +440,20 @@ msgstr "Adiciona um botão 'X-Ray' aos menus de dicionário e seleção para con
 msgid "yes"
 msgstr "Sim"
 
+msgid "menu_reasoning_effort"
+msgstr "Esforço de Raciocínio (GPT)"
+
+msgid "reasoning_low"
+msgstr "Baixo"
+
+msgid "reasoning_medium"
+msgstr "Médio"
+
+msgid "reasoning_high"
+msgstr "Alto"
+
+msgid "reasoning_xhigh"
+msgstr "Muito Alto (X-High)"
+
+msgid "label_reasoning"
+msgstr "RACIOCÍNIO DA IA"

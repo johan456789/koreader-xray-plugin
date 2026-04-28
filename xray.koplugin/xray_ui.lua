@@ -305,6 +305,11 @@ function M:showCharacterDetails(character)
     table.insert(lines, (self.loc:t("label_role") or "ROLE") .. ": " .. (character.role or "---"))
     table.insert(lines, (self.loc:t("label_gender") or "GENDER") .. ": " .. (character.gender or "---"))
     table.insert(lines, (self.loc:t("label_occupation") or "OCCUPATION") .. ": " .. (character.occupation or "---"))
+    if character.ai_reasoning then
+        table.insert(lines, "")
+        table.insert(lines, "[" .. (self.loc:t("label_reasoning") or "AI REASONING") .. "]")
+        table.insert(lines, character.ai_reasoning)
+    end
     table.insert(lines, "")
     table.insert(lines, (self.loc:t("label_description") or "DESCRIPTION") .. ":")
     table.insert(lines, character.description or "---")
@@ -339,6 +344,10 @@ end
 function M:showLocationDetails(loc_item)
     local name = loc_item.name or "???"
     local desc = loc_item.description or ""
+    local text = name .. "\n\n" .. desc
+    if loc_item.ai_reasoning then
+        text = "[" .. (self.loc:t("label_reasoning") or "AI REASONING") .. "]\n" .. loc_item.ai_reasoning .. "\n\n" .. text
+    end
     local mentions_enabled = self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.mentions_enabled ~= false
     if mentions_enabled then
         self.active_details_dialog = ConfirmBox:new{
@@ -742,11 +751,15 @@ end
 function M:showHistoricalFigureDetails(fig)
     local name = fig.name or "???"
     local bio = fig.biography or (self.loc:t("msg_no_bio") or "No biography available.")
+    local text = name .. "\n\n" .. bio
+    if fig.ai_reasoning then
+        text = "[" .. (self.loc:t("label_reasoning") or "AI REASONING") .. "]\n" .. fig.ai_reasoning .. "\n\n" .. text
+    end
     
     local mentions_enabled = self.ai_helper and self.ai_helper.settings and self.ai_helper.settings.mentions_enabled ~= false
     if mentions_enabled then
         self.active_details_dialog = ConfirmBox:new{
-            text = name .. "\n\n" .. bio,
+            text = text,
             icon = "info",
             ok_text = self.loc:t("find_mentions") or "Find Mentions",
             cancel_text = self.loc:t("close") or "Close",
@@ -760,7 +773,7 @@ function M:showHistoricalFigureDetails(fig)
         }
     else
         self.active_details_dialog = ConfirmBox:new{
-            text = name .. "\n\n" .. bio,
+            text = text,
             icon = "info",
             ok_text = self.loc:t("close") or "Close",
             ok_callback = function() self.active_details_dialog = nil end,
@@ -880,6 +893,9 @@ function M:getAIModelSelectionMenu(setting_type)
         { name = "Gemini Pro (gemini-2.5-pro) - " .. (self.loc:t("model_paid") or "paid"), provider = "gemini", id = "gemini-2.5-pro" },
         { name = "ChatGPT Mini (gpt-4o-mini) - " .. (self.loc:t("model_paid") or "paid"), provider = "chatgpt", id = "gpt-4o-mini" },
         { name = "ChatGPT (gpt-4o) - " .. (self.loc:t("model_paid") or "paid"), provider = "chatgpt", id = "gpt-4o" },
+        { name = "GPT-5.5 (gpt-5.5) - " .. (self.loc:t("model_paid") or "paid"), provider = "chatgpt", id = "gpt-5.5" },
+        { name = "GPT-5.4 Mini (gpt-5.4-mini) - " .. (self.loc:t("model_paid") or "paid"), provider = "chatgpt", id = "gpt-5.4-mini" },
+        { name = "GPT-5.4 Nano (gpt-5.4-nano) - " .. (self.loc:t("model_paid") or "paid"), provider = "chatgpt", id = "gpt-5.4-nano" },
     }
     
     local menu_items = {}
@@ -999,6 +1015,66 @@ function M:showConfigSummary()
     add("gemini", "Google Gemini"); add("chatgpt", "ChatGPT")
     
     UIManager:show(InfoMessage:new{ text = text, timeout = 15 })
+end
+
+function M:showReasoningEffortSettings()
+    local ButtonDialog = require("ui/widget/buttondialog")
+    local info_dialog
+    
+    local function showSettings()
+        if info_dialog then UIManager:close(info_dialog) end
+        local current = self.ai_helper.settings and self.ai_helper.settings.reasoning_effort or "medium"
+        
+        info_dialog = ButtonDialog:new{
+            title = self.loc:t("menu_reasoning_effort") or "Reasoning Effort",
+            text = "Supported by gpt-5.x, o1, and o3 models:",
+            buttons = {
+                {
+                    {
+                        text = (current == "low" and "[✓] " or "[  ] ") .. (self.loc:t("reasoning_low") or "Low"),
+                        callback = function()
+                            self.ai_helper:saveSettings({ reasoning_effort = "low" })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    },
+                    {
+                        text = (current == "medium" and "[✓] " or "[  ] ") .. (self.loc:t("reasoning_medium") or "Medium"),
+                        callback = function()
+                            self.ai_helper:saveSettings({ reasoning_effort = "medium" })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = (current == "high" and "[✓] " or "[  ] ") .. (self.loc:t("reasoning_high") or "High"),
+                        callback = function()
+                            self.ai_helper:saveSettings({ reasoning_effort = "high" })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    },
+                    {
+                        text = (current == "xhigh" and "[✓] " or "[  ] ") .. (self.loc:t("reasoning_xhigh") or "Extra High"),
+                        callback = function()
+                            self.ai_helper:saveSettings({ reasoning_effort = "xhigh" })
+                            UIManager:nextTick(function() showSettings() end)
+                        end
+                    }
+                },
+                {
+                    {
+                        text = self.loc:t("close") or "Close",
+                        callback = function()
+                            UIManager:close(info_dialog)
+                        end
+                    }
+                }
+            }
+        }
+        UIManager:show(info_dialog)
+    end
+    
+    showSettings()
 end
 
 function M:checkWeeklyUpdate()

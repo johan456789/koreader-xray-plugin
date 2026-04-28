@@ -255,6 +255,12 @@ function Localization:t(key, ...)
             mentions_preference_desc = "Select your preference for character and location mentions:",
             find_mentions = "Find Mentions",
             menu_about = "About",
+            menu_reasoning_effort = "GPT Reasoning Effort",
+            reasoning_low = "Low",
+            reasoning_medium = "Medium",
+            reasoning_high = "High",
+            reasoning_xhigh = "Extra High (X-High)",
+            label_reasoning = "AI REASONING",
         }
         translation = fallbacks[key] or key
     end
