@@ -443,3 +443,20 @@ msgstr "Adds an 'X-Ray' button to dictionary and selection menus for instant loo
 msgid "yes"
 msgstr "Yes"
 
+msgid "menu_reasoning_effort"
+msgstr "GPT Reasoning Effort"
+
+msgid "reasoning_low"
+msgstr "Low"
+
+msgid "reasoning_medium"
+msgstr "Medium"
+
+msgid "reasoning_high"
+msgstr "High"
+
+msgid "reasoning_xhigh"
+msgstr "Extra High (X-High)"
+
+msgid "label_reasoning"
+msgstr "AI REASONING"

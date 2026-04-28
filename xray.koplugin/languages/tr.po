@@ -440,3 +440,20 @@ msgstr "Anında arama yapmak için sözlük ve seçim menülerine bir 'X-Ray' d�
 msgid "yes"
 msgstr "Evet"
 
+msgid "menu_reasoning_effort"
+msgstr "GPT Akıl Yürütme Çabası"
+
+msgid "reasoning_low"
+msgstr "Düşük"
+
+msgid "reasoning_medium"
+msgstr "Orta"
+
+msgid "reasoning_high"
+msgstr "Yüksek"
+
+msgid "reasoning_xhigh"
+msgstr "Çok Yüksek (X-High)"
+
+msgid "label_reasoning"
+msgstr "YZ AKIL YÜRÜTME"

@@ -256,6 +256,12 @@ function Localization:t(key, ...)
             find_mentions = "Find Mentions",
             menu_about = "About",
             linked_entries = "Linked Entries",
+            menu_reasoning_effort = "GPT Reasoning Effort",
+            reasoning_low = "Low",
+            reasoning_medium = "Medium",
+            reasoning_high = "High",
+            reasoning_xhigh = "Extra High (X-High)",
+            label_reasoning = "AI REASONING",
         }
         translation = fallbacks[key] or key
     end

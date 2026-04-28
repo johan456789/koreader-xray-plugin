@@ -101,6 +101,16 @@ local function sanitize_utf8(s)
     return table.concat(out)
 end
 
+function AIHelper:getChatGPTTokenConfig(model)
+    -- Reasoning models (o1, o3) and newer generations (gpt-5+) require max_completion_tokens.
+    -- Modern standard models (gpt-4o, gpt-4o-mini) also support it and are the new standard.
+    if model:find("^o[13]") or model:find("^gpt%-5") or model:find("^gpt%-4") then
+        return "max_completion_tokens", 16384
+    end
+    -- Legacy models (gpt-4, gpt-3.5) stay with the old parameter and safe limit.
+    return "max_tokens", 4096
+end
+
 function AIHelper:setTrapWidget(trap_widget) self.trap_widget = trap_widget end
 function AIHelper:resetTrapWidget() self.trap_widget = nil end
 
@@ -169,6 +179,7 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
                 url = config.endpoint or "https://api.openai.com/v1/chat/completions"
                 headers = { ["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. config.api_key }
                 local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
+                local token_param, token_val = self:getChatGPTTokenConfig(model)
                 body = json.encode({ 
                     model = model, 
                     messages = {
@@ -176,7 +187,7 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
                         { role = "user", content = prompt }
                     }, 
                     response_format = { type = "json_object" },
-                    max_tokens = 4096
+                    [token_param] = token_val
                 })
             end
             table.insert(requests, { url = url, headers = headers, body = body, provider = ai.provider, model = ai.model })
@@ -918,15 +929,30 @@ function AIHelper:callChatGPT(prompt, config, current_model)
 
     self:log("AIHelper: ChatGPT Prompt prepared")
     local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
-    local request_body = json.encode({ 
+    local token_param, token_val = self:getChatGPTTokenConfig(model)
+    
+    -- Modern models (gpt-5, o1, o3) use 'developer' role instead of 'system'
+    local instruction_role = "system"
+    if model:find("^gpt%-5") or model:find("^o[13]") then
+        instruction_role = "developer"
+    end
+
+    local request_payload = { 
         model = model, 
         messages = {
-            { role = "system", content = system_instruction_text },
+            { role = instruction_role, content = system_instruction_text },
             { role = "user", content = prompt }
         }, 
         response_format = { type = "json_object" }, 
-        max_tokens = 4096 
-    })
+        [token_param] = token_val 
+    }
+
+    -- Add reasoning_effort if configured and supported
+    if self.settings.reasoning_effort and (model:find("^gpt%-5") or model:find("^o[13]")) then
+        request_payload.reasoning_effort = self.settings.reasoning_effort
+    end
+
+    local request_body = json.encode(request_payload)
     self:log("AIHelper: Sending ChatGPT request (" .. #request_body .. " bytes)")
     local ok, code, response_text = self:makeRequest(config.endpoint or "https://api.openai.com/v1/chat/completions", { ["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. config.api_key }, request_body)
     
@@ -937,8 +963,17 @@ function AIHelper:callChatGPT(prompt, config, current_model)
     if code_num == 200 and response_text then 
         local success, data = pcall(json.decode, response_text)
         if success and data.choices and data.choices[1] then
-            local parsed_data, err = self:parseAIResponse(data.choices[1].message.content)
-            if parsed_data then return parsed_data end
+            local message = data.choices[1].message
+            local content = message.content
+            local reasoning = message.reasoning_content
+            
+            local parsed_data, err = self:parseAIResponse(content)
+            if parsed_data then 
+                if reasoning then
+                    parsed_data.ai_reasoning = reasoning
+                end
+                return parsed_data 
+            end
             self:log("AIHelper: ChatGPT parse failed: " .. tostring(err))
         end
     else
