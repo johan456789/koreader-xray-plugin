@@ -116,8 +116,14 @@ msgstr "Buscando informações do autor em %s..."
 msgid "fetching_wait"
 msgstr "⏳ Por favor, aguarde...\nPode levar de 10 a 50 segundos."
 
+msgid "find_mentions"
+msgstr "Encontrar menções"
+
 msgid "full_book_option"
 msgstr "Modo Livro Completo"
+
+msgid "label_aliases"
+msgstr "APELIDOS"
 
 msgid "label_description"
 msgstr "DESCRIÇÃO"
@@ -151,6 +157,36 @@ msgstr "Logs limpos!"
 
 msgid "looking_up_msg"
 msgstr "Buscando por '%s'..."
+
+msgid "mentions_disabled"
+msgstr "Desativado"
+
+msgid "mentions_enabled"
+msgstr "Ativado"
+
+msgid "mentions_none"
+msgstr "Nenhuma menção encontrada para '%s' ainda."
+
+msgid "mentions_preference_desc"
+msgstr "Selecione sua preferência para menções de personagens e locais:"
+
+msgid "mentions_refresh"
+msgstr "Atualizar menções"
+
+msgid "mentions_scanning"
+msgstr "Escaneando... %1 de %2 capítulos"
+
+msgid "mentions_setting_desc"
+msgstr "A varredura de menções permite encontrar cada ocorrência de um personagem ou local no livro. Isso acontece automaticamente em segundo plano para garantir que o leitor continue respondendo.\n\nDesativar isso ocultará o botão 'Encontrar menções'."
+
+msgid "mentions_setting_title"
+msgstr "Configurações de menções"
+
+msgid "mentions_title"
+msgstr "Menções: %s"
+
+msgid "mentions_wait_scan"
+msgstr "Aguarde a varredura terminar antes de navegar..."
 
 msgid "menu_about"
 msgstr "Sobre"
@@ -211,6 +247,9 @@ msgstr "Locais"
 
 msgid "menu_maintenance"
 msgstr "Manutenção"
+
+msgid "menu_mentions_settings"
+msgstr "Configurações de menções"
 
 msgid "menu_primary_ai_model"
 msgstr "Modelo de IA principal"
@@ -401,36 +440,3 @@ msgstr "Adiciona um botão 'X-Ray' aos menus de dicionário e seleção para con
 msgid "yes"
 msgstr "Sim"
 
-
-msgid "mentions_disabled"
-msgstr "Disabled"
-
-msgid "mentions_enabled"
-msgstr "Enabled"
-
-msgid "mentions_none"
-msgstr "No mentions found for '%s' yet."
-
-msgid "mentions_preference_desc"
-msgstr "Select your preference for character and location mentions:"
-
-msgid "mentions_refresh"
-msgstr "Refresh Mentions"
-
-msgid "mentions_scanning"
-msgstr "Scanning... %1 of %2 chapters"
-
-msgid "mentions_setting_desc"
-msgstr "Mentions scanning allows you to find every occurrence of a character or location in the book. This happens automatically in the background to ensure the reader stays responsive.\n\nDisabling this will hide the 'Find Mentions' button."
-
-msgid "mentions_setting_title"
-msgstr "Mentions Settings"
-
-msgid "mentions_title"
-msgstr "Mentions: %s"
-
-msgid "mentions_wait_scan"
-msgstr "Wait for scan to finish before navigating..."
-
-msgid "find_mentions"
-msgstr "Find Mentions"

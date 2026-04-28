@@ -163,9 +163,13 @@ function AIHelper:buildComprehensiveRequest(title, author, context)
                 local model = ai.model or "gpt-4o-mini"
                 url = config.endpoint or "https://api.openai.com/v1/chat/completions"
                 headers = { ["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. config.api_key }
+                local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
                 body = json.encode({ 
                     model = model, 
-                    messages = {{ role = "user", content = prompt }}, 
+                    messages = {
+                        { role = "system", content = system_instruction_text },
+                        { role = "user", content = prompt }
+                    }, 
                     response_format = { type = "json_object" },
                     max_tokens = 4096
                 })
@@ -900,7 +904,16 @@ function AIHelper:callChatGPT(prompt, config, current_model)
     end
 
     self:log("AIHelper: ChatGPT Prompt prepared")
-    local request_body = json.encode({ model = model, messages = {{ role = "user", content = prompt }}, response_format = { type = "json_object" }, max_tokens = 8192 })
+    local system_instruction_text = self.prompts and self.prompts.system_instruction or "Return valid JSON ONLY."
+    local request_body = json.encode({ 
+        model = model, 
+        messages = {
+            { role = "system", content = system_instruction_text },
+            { role = "user", content = prompt }
+        }, 
+        response_format = { type = "json_object" }, 
+        max_tokens = 4096 
+    })
     self:log("AIHelper: Sending ChatGPT request (" .. #request_body .. " bytes)")
     local ok, code, response_text = self:makeRequest(config.endpoint or "https://api.openai.com/v1/chat/completions", { ["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. config.api_key }, request_body)
     

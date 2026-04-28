@@ -116,8 +116,14 @@ msgstr "Yazar bilgisi %s üzerinden çekiliyor..."
 msgid "fetching_wait"
 msgstr "⏳ Lütfen bekleyin...\nBu işlem 10-50 saniye sürebilir."
 
+msgid "find_mentions"
+msgstr "Bahsedilenleri Bul"
+
 msgid "full_book_option"
 msgstr "Tam Kitap Modu"
+
+msgid "label_aliases"
+msgstr "TAKMA ADLAR"
 
 msgid "label_description"
 msgstr "AÇIKLAMA"
@@ -151,6 +157,36 @@ msgstr "Günlükler temizlendi!"
 
 msgid "looking_up_msg"
 msgstr "'%s' aranıyor..."
+
+msgid "mentions_disabled"
+msgstr "Devre Dışı"
+
+msgid "mentions_enabled"
+msgstr "Etkin"
+
+msgid "mentions_none"
+msgstr "'%s' için henüz bahsedilen bir yer bulunamadı."
+
+msgid "mentions_preference_desc"
+msgstr "Karakter ve mekan bahsetmeleri için tercihinizi seçin:"
+
+msgid "mentions_refresh"
+msgstr "Bahsedilenleri Yenile"
+
+msgid "mentions_scanning"
+msgstr "Taranıyor... %1 / %2 bölüm"
+
+msgid "mentions_setting_desc"
+msgstr "Bahsedilenleri tarama, kitaptaki bir karakterin veya mekanın her geçtiği yeri bulmanızı sağlar. Okuyucunun yanıt vermeye devam etmesini sağlamak için bu işlem arka planda otomatik olarak gerçekleşir.\n\nBunu devre dışı bırakmak 'Bahsedilenleri Bul' düğmesini gizleyecektir."
+
+msgid "mentions_setting_title"
+msgstr "Bahsedilenler Ayarları"
+
+msgid "mentions_title"
+msgstr "Bahsedilenler: %s"
+
+msgid "mentions_wait_scan"
+msgstr "Gezinmeden önce taramanın bitmesini bekleyin..."
 
 msgid "menu_about"
 msgstr "Hakkında"
@@ -211,6 +247,9 @@ msgstr "Mekanlar"
 
 msgid "menu_maintenance"
 msgstr "Bakım"
+
+msgid "menu_mentions_settings"
+msgstr "Bahsedilenler Ayarları"
 
 msgid "menu_primary_ai_model"
 msgstr "Birincil YZ Modeli"
@@ -401,36 +440,3 @@ msgstr "Anında arama yapmak için sözlük ve seçim menülerine bir 'X-Ray' d�
 msgid "yes"
 msgstr "Evet"
 
-
-msgid "mentions_disabled"
-msgstr "Disabled"
-
-msgid "mentions_enabled"
-msgstr "Enabled"
-
-msgid "mentions_none"
-msgstr "No mentions found for '%s' yet."
-
-msgid "mentions_preference_desc"
-msgstr "Select your preference for character and location mentions:"
-
-msgid "mentions_refresh"
-msgstr "Refresh Mentions"
-
-msgid "mentions_scanning"
-msgstr "Scanning... %1 of %2 chapters"
-
-msgid "mentions_setting_desc"
-msgstr "Mentions scanning allows you to find every occurrence of a character or location in the book. This happens automatically in the background to ensure the reader stays responsive.\n\nDisabling this will hide the 'Find Mentions' button."
-
-msgid "mentions_setting_title"
-msgstr "Mentions Settings"
-
-msgid "mentions_title"
-msgstr "Mentions: %s"
-
-msgid "mentions_wait_scan"
-msgstr "Wait for scan to finish before navigating..."
-
-msgid "find_mentions"
-msgstr "Find Mentions"
