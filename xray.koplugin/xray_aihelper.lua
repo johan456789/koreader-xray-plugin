@@ -1,16 +1,21 @@
 -- AIHelper - Google Gemini & ChatGPT for X-Ray
-local http = require("socket.http")
-local https = require("ssl.https")
-local ltn12 = require("ltn12")
-local socket = require("socket")
-local socketutil = require("socketutil")
+local ok_http, http = pcall(require, "socket.http")
+local ok_https, https = pcall(require, "ssl.https")
+local ok_ltn12, ltn12 = pcall(require, "ltn12")
+local ok_socket, socket = pcall(require, "socket")
+local ok_socketutil, socketutil = pcall(require, "socketutil")
+
 local logger = require("logger")
-local XRayLogger = require("xray_logger")
+local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
+local XRayLogger = require(plugin_path .. "xray_logger")
 local Trapper = require("ui/trapper")
 
 -- Optimization: Use rapidjson if available
-local rapidjson_ok, rapidjson = pcall(require, "rapidjson")
-local json = rapidjson_ok and rapidjson or require("json")
+local json_ok, json = pcall(require, "json")
+if not json_ok then
+    rapidjson_ok, json = pcall(require, "rapidjson")
+end
+
 
 local AIHelper = {
     path = nil,
@@ -465,9 +470,11 @@ end
 
 function AIHelper:init(path)
     self.path = path or "plugins/xray.koplugin"
-    self:loadConfig(); self:loadSettings()
+    self:loadConfig()
+    self:loadSettings()
     self:log("AIHelper initialized")
 end
+
 
 function AIHelper:loadConfig()
     local new_config_file = self.path .. "/xray_config.lua"
@@ -489,11 +496,14 @@ function AIHelper:loadConfig()
                     local new_text = new_f:read("*a")
                     new_f:close()
                     if old_config.gemini_api_key and #old_config.gemini_api_key > 0 then
-                        new_text = new_text:gsub('gemini_api_key%s*=%s*""', 'gemini_api_key = "' .. old_config.gemini_api_key .. '"')
+                        local safe_key = old_config.gemini_api_key:gsub("%%", "%%%%")
+                        new_text = new_text:gsub('gemini_api_key%s*=%s*""', 'gemini_api_key = "' .. safe_key .. '"')
                     end
                     if old_config.chatgpt_api_key and #old_config.chatgpt_api_key > 0 then
-                        new_text = new_text:gsub('chatgpt_api_key%s*=%s*""', 'chatgpt_api_key = "' .. old_config.chatgpt_api_key .. '"')
+                        local safe_key = old_config.chatgpt_api_key:gsub("%%", "%%%%")
+                        new_text = new_text:gsub('chatgpt_api_key%s*=%s*""', 'chatgpt_api_key = "' .. safe_key .. '"')
                     end
+
                     local out_f = io.open(new_config_file, "w")
                     if out_f then
                         out_f:write(new_text)
@@ -535,11 +545,13 @@ function AIHelper:loadSettings()
     
     if not ok or type(lfs) ~= "table" then
         self:log("AIHelper: Settings will be in-memory only (lfs module missing)")
+        lfs = nil
     else
         if lfs.attributes(xray_dir, "mode") ~= "directory" then
             lfs.mkdir(xray_dir)
         end
     end
+
     
     local settings_file = xray_dir .. "/settings.json"
     
@@ -664,6 +676,7 @@ function AIHelper:saveSettings(new_settings)
     if lfs.attributes(xray_dir, "mode") ~= "directory" then
         lfs.mkdir(xray_dir)
     end
+
     
     self.settings = self.settings or {}
     if new_settings then

@@ -6,6 +6,7 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local Menu = require("ui/widget/menu")
 local Screen = require("device").screen
 local _ = require("gettext")
+local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
 
 local M = {}
 
@@ -136,7 +137,7 @@ function M:checkBookLanguageMatch()
     if self.suggestion_dismissed[self.ui.document.file] then return end
     
     -- Check if we should ignore this book (from cache)
-    if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+    if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
     local cache = self.cache_manager:loadCache(self.ui.document.file)
     if cache and cache.ignore_lang_mismatch then return end
 
@@ -635,21 +636,21 @@ function M:showAbout()
         ok_text = self.loc:t("updater_check") or "Check for Updates",
         cancel_text = self.loc:t("close") or "Close",
         ok_callback = function()
-            local updater = require("xray_updater")
+            local updater = require(plugin_path .. "xray_updater")
             updater.checkForUpdates(self.loc)
         end,
     })
 end
 
 function M:clearCache()
-    if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+    if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
     self.cache_manager:clearCache(self.ui.document.file)
     self.characters = {}; self.locations = {}; self.timeline = {}; self.historical_figures = {}; self.author_info = nil
     UIManager:show(InfoMessage:new{ text = self.loc:t("cache_cleared"), timeout = 3 })
 end
 
 function M:clearLogs()
-    local XRayLogger = require("xray_logger")
+    local XRayLogger = require(plugin_path .. "xray_logger")
     XRayLogger:clear()
     UIManager:show(InfoMessage:new{ text = self.loc:t("logs_cleared") or "Logs cleared!", timeout = 3 })
 end
@@ -1012,7 +1013,7 @@ function M:checkWeeklyUpdate()
         if NetworkMgr:isOnline() then
             self:log("XRayPlugin: Triggering weekly silent update check")
             self.ai_helper:saveSettings({ last_update_check = now })
-            local updater = require("xray_updater")
+            local updater = require(plugin_path .. "xray_updater")
             updater.checkSilentForUpdates(self.loc)
         else
             self:log("XRayPlugin: Skipping weekly update check (offline)")

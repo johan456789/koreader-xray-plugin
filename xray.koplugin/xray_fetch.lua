@@ -3,6 +3,7 @@
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 local logger = require("logger")
+local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
 
 local M = {}
 
@@ -62,7 +63,7 @@ function M:fetchSingleWord(text, pos0, pos1)
         UIManager:show(wait_msg)
 
         UIManager:scheduleIn(0.5, function()
-            if not self.chapter_analyzer then self.chapter_analyzer = require("xray_chapteranalyzer"):new() end
+            if not self.chapter_analyzer then self.chapter_analyzer = require(plugin_path .. "xray_chapteranalyzer"):new() end
             
             -- 1. Distributed chapter samples (Start/Mid/End of each chapter up to current)
             -- We use a moderate budget (60k) to balance context depth with fetch speed.
@@ -122,7 +123,7 @@ function M:fetchSingleWord(text, pos0, pos1)
                     
                     -- Sort and save cache
                     self:sortDataByFrequency(target_list, book_text, "name")
-                    if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+                    if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
                     
                     -- Prepare data for cache save
                     local book_data = {
@@ -151,7 +152,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
         self.bg_fetch_active = true
     end
     if not self.ai_helper then
-        local AIHelper = require("xray_aihelper")
+        local AIHelper = require(plugin_path .. "xray_aihelper")
         self.ai_helper = AIHelper
         self.ai_helper:init(self.path)
     end
@@ -169,7 +170,7 @@ function M:continueWithFetch(reading_percent, is_update, last_fetch_page, is_sil
     
     UIManager:scheduleIn(0.5, function()
         if is_cancelled then return end
-        if not self.chapter_analyzer then self.chapter_analyzer = require("xray_chapteranalyzer"):new() end
+        if not self.chapter_analyzer then self.chapter_analyzer = require(plugin_path .. "xray_chapteranalyzer"):new() end
 
         -- 1a. Lightweight prep: resolve current page and find first missing page
         local current_page = self.ui:getCurrentPage()
@@ -453,7 +454,7 @@ function M:finalizeXRayData(final_book_data, title, author, book_text, is_update
 
     -- If we don't have author info in memory, check if the cache already has it
     if not self.author_info then
-        if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+        if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
         local existing = self.cache_manager:loadCache(self.ui.document.file)
         if existing and existing.author_info then
             self.author_info = existing.author_info
@@ -473,7 +474,7 @@ function M:finalizeXRayData(final_book_data, title, author, book_text, is_update
     
     self.book_data = updated_data
 
-    if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+    if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
     local cache_saved = self.cache_manager:saveCache(self.ui.document.file, updated_data)
 
     if is_silent then
@@ -505,7 +506,7 @@ end
 function M:fetchMoreCharacters()
     require("ui/network/manager"):runWhenOnline(function() 
         if not self.ai_helper then
-            local AIHelper = require("xray_aihelper")
+            local AIHelper = require(plugin_path .. "xray_aihelper")
             self.ai_helper = AIHelper
             self.ai_helper:init(self.path)
         end
@@ -530,7 +531,7 @@ function M:fetchMoreCharacters()
         
         UIManager:scheduleIn(0.5, function()
             if is_cancelled then return end
-            if not self.chapter_analyzer then self.chapter_analyzer = require("xray_chapteranalyzer"):new() end
+            if not self.chapter_analyzer then self.chapter_analyzer = require(plugin_path .. "xray_chapteranalyzer"):new() end
             
             -- EVEN SAMPLING: Divide the readable range into equal segments
             local current_page = self.ui:getCurrentPage()
@@ -622,7 +623,7 @@ function M:fetchMoreCharacters()
             end
             
             -- Save to cache
-            if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+            if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
             local existing_cache = self.cache_manager:loadCache(self.ui.document.file) or {}
             local updated_data = {
                 book_title = title,
@@ -648,7 +649,7 @@ end
 
 function M:fetchAuthorInfo()
     if not self.ai_helper then
-        local AIHelper = require("xray_aihelper")
+        local AIHelper = require(plugin_path .. "xray_aihelper")
         self.ai_helper = AIHelper
         self.ai_helper:init(self.path)
     end
@@ -663,7 +664,7 @@ function M:fetchAuthorInfo()
         if is_cancelled then return end
         
         if not self.chapter_analyzer then
-            local ChapterAnalyzer = require("xray_chapteranalyzer")
+            local ChapterAnalyzer = require(plugin_path .. "xray_chapteranalyzer")
             self.chapter_analyzer = ChapterAnalyzer:new()
         end
         local book_text = self.chapter_analyzer:getTextForAnalysis(self.ui, 1000, nil, self.ui:getCurrentPage())
@@ -689,7 +690,7 @@ function M:fetchAuthorInfo()
             birthDate = sanitizeMetadata(author_data.author_birth or "---"), 
             deathDate = sanitizeMetadata(author_data.author_death or "---") 
         }
-        if not self.cache_manager then self.cache_manager = require("xray_cachemanager"):new() end
+        if not self.cache_manager then self.cache_manager = require(plugin_path .. "xray_cachemanager"):new() end
         local cache = self.cache_manager:loadCache(self.ui.document.file) or {}
         cache.author_info = self.author_info
         cache.author = self.author_info.name; cache.author_bio = self.author_info.description; cache.author_birth = self.author_info.birthDate; cache.author_death = self.author_info.deathDate
@@ -710,7 +711,7 @@ function M:checkWeeklyUpdate()
         if NetworkMgr:isOnline() then
             self:log("XRayPlugin: Triggering weekly silent update check")
             self.ai_helper:saveSettings({ last_update_check = now })
-            local updater = require("xray_updater")
+            local updater = require(plugin_path .. "xray_updater")
             updater.checkSilentForUpdates(self.loc)
         else
             self:log("XRayPlugin: Skipping weekly update check (offline)")

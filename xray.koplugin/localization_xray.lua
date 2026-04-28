@@ -1,7 +1,15 @@
 -- Localization Manager for X-Ray Plugin (with .po support)
 
 local logger = require("logger")
-local lfs = require("libs/libkoreader-lfs")
+local ok, lfs = pcall(require, "libs/libkoreader-lfs")
+if not ok or type(lfs) ~= "table" then
+    ok, lfs = pcall(require, "lfs")
+end
+if not ok then
+    logger.error("Localization: lfs module not found!")
+end
+local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
+
 
 local Localization = {
     current_language = "en",
@@ -26,39 +34,36 @@ function Localization:parsePO(filepath)
     
     for line in file:lines() do
         -- Skip comments and empty lines
-        if line:match("^#") or line:match("^%s*$") then
-            goto continue
-        end
-        
-        -- Start of msgid
-        if line:match('^msgid%s+"') then
-            -- Save previous translation
-            if msgid and msgstr then
-                translations[msgid] = msgstr
-            end
+        if not (line:match("^#") or line:match("^%s*$")) then
+            -- Start of msgid
+            if line:match('^msgid%s+"') then
+                -- Save previous translation
+                if msgid and msgstr then
+                    translations[msgid] = msgstr
+                end
+                
+                msgid = line:match('^msgid%s+"(.-)"')
+                msgstr = nil
+                in_msgid = true
+                in_msgstr = false
             
-            msgid = line:match('^msgid%s+"(.-)"')
-            msgstr = nil
-            in_msgid = true
-            in_msgstr = false
-        
-        -- Start of msgstr
-        elseif line:match('^msgstr%s+"') then
-            msgstr = line:match('^msgstr%s+"(.-)"')
-            in_msgid = false
-            in_msgstr = true
-        
-        -- Continuation line
-        elseif line:match('^"') then
-            local continuation = line:match('^"(.-)"')
-            if in_msgid and msgid then
-                msgid = msgid .. continuation
-            elseif in_msgstr and msgstr then
-                msgstr = msgstr .. continuation
+            -- Start of msgstr
+            elseif line:match('^msgstr%s+"') then
+                msgstr = line:match('^msgstr%s+"(.-)"')
+                in_msgid = false
+                in_msgstr = true
+            
+            -- Continuation line
+            elseif line:match('^"') then
+                local continuation = line:match('^"(.-)"')
+                if in_msgid and msgid then
+                    msgid = msgid .. continuation
+                elseif in_msgstr and msgstr then
+                    msgstr = msgstr .. continuation
+                end
             end
         end
-        
-        ::continue::
+
     end
     
     -- Save last translation
@@ -108,7 +113,12 @@ function Localization:discoverLanguages()
     
     self.available_languages = {}
     
+    if not lfs then
+        logger.error("Localization: lfs not available, skipping language discovery")
+        return
+    end
     local attr = lfs.attributes(lang_dir)
+
     if not attr or attr.mode ~= "directory" then
         logger.warn("Localization: Languages directory not found:", lang_dir)
         -- Try fallback to hardcoded path if current path failed
@@ -126,6 +136,7 @@ function Localization:discoverLanguages()
     end
     
     for file in lfs.dir(lang_dir) do
+
         if file:match("%.po$") then
             local lang_code = file:match("^(.+)%.po$")
             if lang_code then
@@ -338,7 +349,7 @@ function Localization:setLanguage(lang_code)
     
     self:loadTranslations()
     
-    local AIHelper = require("xray_aihelper")
+    local AIHelper = require(plugin_path .. "xray_aihelper")
     if AIHelper then
         AIHelper:loadLanguage()
     end
@@ -352,7 +363,7 @@ function Localization:reload()
     self:loadTranslations()
     
     -- Clear cached translations in AIHelper if it exists
-    local AIHelper = require("xray_aihelper")
+    local AIHelper = require(plugin_path .. "xray_aihelper")
     if AIHelper and AIHelper.localization then
         AIHelper.localization = nil
     end

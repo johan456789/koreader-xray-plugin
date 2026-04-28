@@ -1,7 +1,5 @@
 -- X-Ray API Configuration
 
-local Utils = require("xray_utils")
-
 return {
     -- Google Gemini API Key
     -- To get an API key: https://makersuite.google.com/app/apikey
@@ -12,7 +10,4 @@ return {
     -- To get an API key: https://platform.openai.com/api-keys
     -- Enter your API key here:
     chatgpt_api_key = "",  
-
-    -- Hardware Capabilities
-    isLowPowerDevice = Utils:isLowPowerDevice(),
 }

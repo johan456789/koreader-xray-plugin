@@ -1,6 +1,7 @@
 -- ChapterAnalyzer - Analyze which characters appear in current chapter/page
 local logger = require("logger")
-local AIHelper = require("xray_aihelper")
+local plugin_path = ((...) or ""):match("(.-)[^%.]+$") or ""
+local AIHelper = require(plugin_path .. "xray_aihelper")
 
 local ChapterAnalyzer = {}
 
@@ -935,7 +936,7 @@ function ChapterAnalyzer:scanMentionsAsync(ui, entity, toc, max_page, on_progres
     end
 
     local UIManager = require("ui/uimanager")
-    local XRayConfig = require("xray_config")
+    local XRayConfig = require(plugin_path .. "xray_config")
     local cancel_handle = { _cancelled = false }
     function cancel_handle:cancel()
         self._cancelled = true
@@ -996,13 +997,13 @@ function ChapterAnalyzer:scanMentionsAsync(ui, entity, toc, max_page, on_progres
 
         if coroutine.status(scan_co) ~= "dead" then
             -- Schedule next chunk
-            local delay = XRayConfig.isLowPowerDevice and 0.1 or 0.01
+            local delay = 0.01
             UIManager:scheduleIn(delay, resumeScan)
         end
     end
 
     -- Start the scan
-    UIManager:scheduleIn(XRayConfig.isLowPowerDevice and 0.2 or 0, resumeScan)
+    UIManager:scheduleIn(0.2, resumeScan)
     
     return cancel_handle
 end
