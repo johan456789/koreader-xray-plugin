@@ -928,8 +928,8 @@ function XRayPlugin:closeAllMenus()
         self.timeline_menu, self.hf_menu, self.xray_menu,
         self.active_details_dialog
     }
-    for _, m in ipairs(menus) do
-        if m then UIManager:close(m) end
+    for i = 1, 7 do
+        if menus[i] then pcall(function() UIManager:close(menus[i]) end) end
     end
     self.mentions_menu = nil; self.char_menu = nil; self.loc_menu = nil
     self.timeline_menu = nil; self.hf_menu = nil; self.xray_menu = nil
@@ -1006,7 +1006,10 @@ function XRayPlugin:showCharacters()
         is_borderless = true,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
-        on_close_callback = function() self:showFullXRayMenu() end,
+        on_close_callback = function() 
+            if self.is_cancelled then return end
+            self:showFullXRayMenu() 
+        end,
     }
     UIManager:show(self.char_menu)
 end
@@ -1492,7 +1495,10 @@ function XRayPlugin:showMentionsMenu(entity)
         is_borderless  = true,
         width          = Screen:getWidth(),
         height         = Screen:getHeight(),
-        on_close_callback = function() self:showFullXRayMenu() end,
+        on_close_callback = function() 
+            if self.is_cancelled then return end
+            self:showFullXRayMenu() 
+        end,
     }
     UIManager:show(self.mentions_menu)
 end
@@ -2665,7 +2671,10 @@ function XRayPlugin:showLocations()
         is_borderless = true,
         width = Screen:getWidth(),
         height = Screen:getHeight(),
-        on_close_callback = function() self:showFullXRayMenu() end,
+        on_close_callback = function() 
+            if self.is_cancelled then return end
+            self:showFullXRayMenu() 
+        end,
     }
     UIManager:show(self.loc_menu)
 end
@@ -2781,7 +2790,10 @@ function XRayPlugin:showTimeline()
         is_borderless = true, 
         width = Screen:getWidth(), 
         height = Screen:getHeight(),
-        on_close_callback = function() self:showFullXRayMenu() end,
+        on_close_callback = function() 
+            if self.is_cancelled then return end
+            self:showFullXRayMenu() 
+        end,
     }
     UIManager:show(self.timeline_menu)
 end
@@ -2840,7 +2852,10 @@ function XRayPlugin:showHistoricalFigures()
         is_borderless = true, 
         width = Screen:getWidth(), 
         height = Screen:getHeight(),
-        on_close_callback = function() self:showFullXRayMenu() end,
+        on_close_callback = function() 
+            if self.is_cancelled then return end
+            self:showFullXRayMenu() 
+        end,
     }
     UIManager:show(self.hf_menu)
 end
